@@ -1,3 +1,6 @@
+# Local reference / Unity scratch (not part of the Flutter app)
+/Temp/
+
 # Miscellaneous
 *.class
 *.log
