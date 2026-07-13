@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
@@ -12,16 +13,19 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.MediaSession
 import io.flutter.plugin.common.EventChannel
 
 class RadioPlayerManager(context: Context) {
     private val appContext = context.applicationContext
     private var eventSink: EventChannel.EventSink? = null
+    private var mediaSession: MediaSession? = null
     private var isMuted = false
     private var currentUrl: String? = null
     private var lastError: String? = null
+    private var currentTitle: String? = null
 
-    private val player: ExoPlayer = createPlayer()
+    val player: ExoPlayer = createPlayer()
 
     private fun createPlayer(): ExoPlayer {
         val httpDataSourceFactory =
@@ -67,6 +71,9 @@ class RadioPlayerManager(context: Context) {
                     object : Player.Listener {
                         override fun onPlaybackStateChanged(playbackState: Int) {
                             emitState()
+                            if (playbackState == Player.STATE_IDLE && currentUrl == null) {
+                                RadioPlaybackService.stop(appContext)
+                            }
                         }
 
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -95,6 +102,14 @@ class RadioPlayerManager(context: Context) {
             }
     }
 
+    fun attachMediaSession(session: MediaSession) {
+        mediaSession = session
+    }
+
+    fun detachMediaSession() {
+        mediaSession = null
+    }
+
     fun setEventSink(sink: EventChannel.EventSink?) {
         eventSink = sink
         if (sink != null) {
@@ -116,9 +131,17 @@ class RadioPlayerManager(context: Context) {
         lastError = null
         currentUrl = url
 
+        val title = titleForUrl(url)
+        currentTitle = title
         val mediaItem =
             MediaItem.Builder()
                 .setUri(url)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(title)
+                        .setArtist("Internet Radio")
+                        .build(),
+                )
                 .setLiveConfiguration(
                     MediaItem.LiveConfiguration.Builder()
                         .setMinPlaybackSpeed(1f)
@@ -131,6 +154,8 @@ class RadioPlayerManager(context: Context) {
         player.volume = if (isMuted) 0f else 1f
         player.playWhenReady = true
 
+        RadioPlaybackService.start(appContext)
+
         if (applyAudioRouteFix) {
             AudioRouteFixer.retriggerAudioRouting(appContext)
         }
@@ -139,11 +164,15 @@ class RadioPlayerManager(context: Context) {
         return true
     }
 
-    fun stop() {
+    fun stop(stopService: Boolean = true) {
         releaseCurrentStream()
         currentUrl = null
+        currentTitle = null
         lastError = null
         emitState()
+        if (stopService) {
+            RadioPlaybackService.stop(appContext)
+        }
     }
 
     fun setMuted(muted: Boolean) {
@@ -152,6 +181,7 @@ class RadioPlayerManager(context: Context) {
         }
         isMuted = muted
         player.volume = if (muted) 0f else 1f
+        updateNotificationButtons()
         emitState()
     }
 
@@ -176,10 +206,17 @@ class RadioPlayerManager(context: Context) {
         }
     }
 
-    fun dispose() {
-        releaseCurrentStream()
+    fun currentTitle(): String? = currentTitle
+
+    fun detach() {
+        eventSink = null
+    }
+
+    fun release() {
+        stop(stopService = true)
         player.release()
         eventSink = null
+        mediaSession = null
     }
 
     private fun releaseCurrentStream() {
@@ -188,6 +225,14 @@ class RadioPlayerManager(context: Context) {
         }
         player.stop()
         player.clearMediaItems()
+    }
+
+    private fun titleForUrl(url: String): String {
+        return when {
+            url.contains("triplej", ignoreCase = true) -> "Triple J NSW"
+            url.contains("alltimehits", ignoreCase = true) -> "All Time Hits"
+            else -> "Internet Radio"
+        }
     }
 
     private fun playbackStateName(state: Int): String {
@@ -202,6 +247,10 @@ class RadioPlayerManager(context: Context) {
 
     private fun emitState(started: Boolean? = null) {
         eventSink?.success(currentState(started))
+    }
+
+    private fun updateNotificationButtons() {
+        mediaSession?.setMediaButtonPreferences(RadioPlaybackService.mediaButtons(isMuted))
     }
 
     companion object {

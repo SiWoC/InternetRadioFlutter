@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="radio_notification_channel_name">Radio playback</string>
+    <string name="radio_notification_channel_description">Shows the current station and playback controls</string>
+    <string name="radio_action_mute">Mute</string>
+    <string name="radio_action_unmute">Unmute</string>
+    <string name="radio_action_stop">Stop</string>
+    <string name="radio_default_title">Internet Radio</string>
+</resources>

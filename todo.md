@@ -9,15 +9,15 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 ## Layer 0 — Native audio (Kotlin)
 
 ### 0.1 Foreground playback
-- [ ] Add `MediaSessionService` (or `MediaSession` + foreground service)
-- [ ] Media notification (station name, mute/stop)
-- [ ] Wire `RadioPlayerManager` into the service (not only `MainActivity` lifecycle)
-- [ ] Handle audio focus in service context
+- [x] Add `MediaSessionService` (or `MediaSession` + foreground service)
+- [x] Media notification (station name, mute/stop)
+- [x] Wire `RadioPlayerManager` into the service (not only `MainActivity` lifecycle)
+- [x] Handle audio focus in service context
 
 ### 0.2 Lifecycle
-- [ ] Playback survives app background / screen off
-- [ ] Clean shutdown on app kill vs user stop
-- [ ] Decide owner: Dart dispose vs service-owned player
+- [x] Playback survives app background / screen off
+- [x] Clean shutdown on app kill vs user stop (notification swipe/app swipe stop playback)
+- [x] Decide owner: Dart dispose vs service-owned player
 
 ### 0.3 Hardening
 - [ ] Stream error → auto-retry with backoff (optional)
@@ -100,6 +100,7 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [ ] Scrollable grid (portrait/landscape column count)
 - [ ] Station tile: logo or name fallback
 - [ ] Selected state highlight
+- [ ] Start internatiolisation en/nl
 
 ### 4.2 `MainScreen` (static chrome inline — no separate widget files)
 - [ ] Mute button (playing / muted visuals)

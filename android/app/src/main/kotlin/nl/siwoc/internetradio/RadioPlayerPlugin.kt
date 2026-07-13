@@ -10,7 +10,7 @@ class RadioPlayerPlugin(
     activity: Activity,
     messenger: BinaryMessenger,
 ) {
-    private val playerManager = RadioPlayerManager(activity)
+    private val playerManager = RadioPlayerHolder.getInstance(activity)
     private val methodChannel = MethodChannel(messenger, METHOD_CHANNEL)
     private val eventChannel = EventChannel(messenger, EVENT_CHANNEL)
 
@@ -63,9 +63,9 @@ class RadioPlayerPlugin(
         }
     }
 
-    fun dispose() {
+    fun detach() {
         methodChannel.setMethodCallHandler(null)
-        playerManager.dispose()
+        playerManager.detach()
     }
 
     companion object {
