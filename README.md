@@ -1,12 +1,12 @@
-# Internet Radio Unity
+# Internet Radio Flutter
 
-A Unity-based internet radio streaming application designed to run on one of my old Android phones which I connect through the headphone jack to my receiver.
+A Flutter/Dart/Kotlin-based internet radio streaming application designed to run on one of my old Android phones which I connect through the headphone jack to my receiver.
 
 ![Internet Radio Lego Frame](Internet%20Radio%20Lego%20frame.jpg)
 
 ## Features
 
-- **Internet Radio** - Stream radio stations using FMOD audio engine
+- **Internet Radio** - Stream radio stations via Android Media3 (ExoPlayer)
 - **Remote Control** - Install the app on two devices and control one with the other
 - **Custom Station Library** - Configure multiple radio stations with logos through a "hardcoded json" before building.
 - **Mute/Unmute Control** - Toggle audio playback (current build mutes the stream which means it keeps consuming data, but prevents having to listen to the start commercial on resume)
@@ -14,20 +14,53 @@ A Unity-based internet radio streaming application designed to run on one of my 
 
 ## Technologies
 
-- **Unity 6.2** - Game engine and UI framework
-- **FMOD** - Professional audio streaming engine
+| Layer | Stack | Role |
+|-------|--------|------|
+| UI | **Flutter 3.44** / **Dart 3.12** | Screens, station grid, settings, remote UI |
+| App logic | **Dart** | Stations, settings, TCP remote protocol, controllers |
+| Audio | **Kotlin** + **AndroidX Media3 1.10** | Live stream playback, mute, audio routing |
+| Bridge | **MethodChannel** / **EventChannel** | Dart ↔ native player |
+| Persistence | **shared_preferences**  | Mode, player IP, last station |
+| Networking | **dart:io** TCP | Remote control on port 6435 |
+
+**Android:** minSdk 26 (Android 8), target Android 14. Built-in Kotlin (AGP).
 
 ## Requirements
 
-- Unity 6.2 or later
-- FMOD Unity Integration
-- FMOD Studio with a minimal project (although I only use the streaming api atm, building the app requires the FMOD plugin to be initialized with an actual project)
+- Flutter 3.44.2 (Dart 3.12.2)
+- Android SDK / device or emulator (API 26+)
+- JDK 17 (for Android Gradle builds)
+
+## Project layout (app code)
+
+```
+lib/
+  main.dart                 # App entry
+  services/
+    radio_player_service.dart   # PoC: media3_radio_player.dart (rename)
+    radio_player_state.dart
+android/app/src/main/kotlin/nl/siwoc/internetradio/
+  RadioPlayerManager.kt     # Media3 / ExoPlayer
+  RadioPlayerPlugin.kt      # Platform channel
+  MainActivity.kt
+assets/                     # Station config
+  settings.json
+  images/                   # Station logos (PNG)
+```
 
 ## Configuration
 
-### Adding Radio Stations
+### Station list — `assets/settings.json`
 
-Radio stations are configured via JSON file located at `Assets/Resources/settings.json`:
+Place the station list at:
+
+```
+assets/settings.json
+```
+
+Register it in `pubspec.yaml` under `flutter: assets:`.
+
+Format (same as the Unity app):
 
 ```json
 {
@@ -35,39 +68,55 @@ Radio stations are configured via JSON file located at `Assets/Resources/setting
     {
       "name": "Station Name",
       "url": "https://stream-url.com/stream",
-      "image": "station-logo"
+      "image": "/images/station-logo.png"
     }
   ]
 }
 ```
 
 - **name** - Display name of the station
-- **url** - Direct streaming URL (test which streams work, FMOD tries different formats like ogg and MIDI)
-- **image** - Logo filename in `Assets/Resources/` (without .png extension)
+- **url** — Stream URL (MP3, Icecast, redirects, etc.; verify per station with Media3)
+- **image** — Path under `assets/`, typically `/images/filename.png`
 
-Station logos should be placed in the `Assets/Resources/` folder as PNG or WEBP images (this can be in an images subfolder).
+The last station in the list is reserved for URL testing in settings (Unity behaviour).
 
-### Fallback Stations
+### Station logos — `assets/images/`
 
-If `settings.json` fails to load, the app includes hardcoded fallback stations:
+Place logo files at:
+
+```
+assets/images/
+  station-logo.png
+  ...
+```
+
+Use PNG (WEBP possible if the loader supports it). If a logo is missing, the UI falls back to the station name.
+
+### Fallback stations
+
+If `settings.json` fails to load, the app should use hardcoded fallbacks:
+
 - ABC Triple J NSW
 - Q-Music
 - Radio 538
 
 ## Controls
 
-- **Station Buttons** - Tap to switch stations
-- **Mute Button** - Toggle audio on/off
-- **Exit Button** - Close application (Android only)
-- **Touch/Mouse** - Resets screensaver timer
+- **Station buttons** — Switch station (Player) or send remote command (Remote)
+- **Mute** — Toggle output (stream stays connected)
+- **Player / Remote** — Operating mode
+- **Settings** — Player IP, connection test, URL test
+- **Touch** — Resets screensaver timer
+- **Exit** — Close app (Android)
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+GNU General Public License v3.0 — see [LICENSE](LICENSE).
 
 ## Notes
 
-- The application prevents device sleep while running
-- Screensaver activates after period of inactivity
-- Station state persists between app sessions
-
+- Player mode keeps the device awake while playing
+- Screensaver after ~60s inactivity
+- Last station and mode persist between sessions
+- Development checklist: [todo.md](todo.md)
+- Class & folder overview: [docs/class-overview.md](docs/class-overview.md)
