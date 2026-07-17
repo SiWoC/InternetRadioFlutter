@@ -121,5 +121,8 @@ GNU General Public License v3.0 — see [LICENSE](LICENSE).
 - Player mode keeps the device awake while playing
 - Screensaver after ~60s inactivity
 - Last station and mode persist between sessions
+- Test devices:
+  - **Moto G 5S Plus** — 1080 × 1920 (5.5″, 16:9), Android 8
+  - **OnePlus Nord 2T** — 1080 × 2400 (6.43″, 20:9), Android 14
 - Development checklist: [todo.md](todo.md)
 - Class & folder overview: [docs/class-overview.md](docs/class-overview.md)

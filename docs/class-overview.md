@@ -110,7 +110,7 @@ Talks to assets, disk, network, or native code. No UI.
 | **`NetworkService`** | 🔲 | TCP on port **6435**. Player: run server, dispatch commands. Remote: send commands, poll state. Parse/build protocol strings. |
 | **`NetworkProtocol`** | 🔲 | Static helpers: `ping`, `selectStation(n)`, `mute`, `unmute`, `getState`, `testUrl`, parse `PONG` / `STATE\|…`. Keeps string format in one place. |
 | **`WakelockService`** | 🔲 | Keep screen on when **display policy** = `keepScreenOn` (Player mode). Off when `allowScreenOff` or Remote mode. |
-| **`LocalNetworkInfo`** | 🔲 | Local device IP for bottom-left display (Dart or small platform helper). |
+| **`LocalNetworkInfo`** | ✅ | Local device IP for bottom-left display (Dart `NetworkInterface`). |
 
 ---
 
@@ -132,7 +132,7 @@ Orchestrates services and exposes state for UI. Single place for “what happens
 | Class | Status | Responsibility |
 |-------|--------|----------------|
 | **`InternetRadioApp`** | ✅ (in `main.dart`) | `MaterialApp`, theme, home route. |
-| **`AppScope` / providers** | 🔲 | Create single `RadioController`, `RadioPlayerService`, repos; inject into widget tree (`Provider`, `Riverpod`, or manual inheritance). |
+| **`AppScope` / providers** | ✅ | `InheritedNotifier` for the single app-wide `RadioController`. Created in `main()` after loading repos. |
 
 ---
 
@@ -140,9 +140,7 @@ Orchestrates services and exposes state for UI. Single place for “what happens
 
 | Class | Status | Responsibility |
 |-------|--------|----------------|
-| **`MainScreen`** | 🔲 | Main radio UI. Static controls inline in MainScreen: mute, mode toggle, IP, settings opener, exit, current station name. Composes `StationGrid`; stacks overlays. Reads `RadioController`. |
-
-*PoC today:* `RadioPocScreen` in `main.dart` — replace with `MainScreen` at M1.
+| **`MainScreen`** | ✅ | Main radio UI. Static controls inline in MainScreen: mute, mode toggle, IP, settings opener, exit, current station name. Composes `StationGrid`; stacks overlays. Reads `RadioController`. |
 
 ---
 
@@ -152,8 +150,8 @@ Extract when repeated, layout-heavy, or a separate layer. Everything else stays 
 
 | Class | Status | Why separate | Responsibility |
 |-------|--------|----------------|----------------|
-| **`StationTile`** | 🔲 | Repeated many times | One station button: logo or name fallback, selected highlight, onTap. |
-| **`StationGrid`** | 🔲 | Non-trivial layout | Scrollable grid, column count from orientation, builds `StationTile` list. |
+| **`StationTile`** | ✅ | Repeated many times | One station button: logo or name fallback, selected highlight, onTap. |
+| **`StationGrid`** | ✅ | Non-trivial layout | Scrollable grid: portrait 3 columns (vertical scroll), landscape 3 rows (horizontal scroll). |
 | **`SettingsOverlay`** | 🔲 | Different layer / lifecycle | Modal/sheet: player IP, connection test, URL test, **display policy** (Player). Disabled screensaver while open. |
 | **`ScreensaverOverlay`** | 🔲 | Different layer / lifecycle | Full-screen bouncing station logo; tap to dismiss. Active only when display policy = `keepScreenOn`. |
 

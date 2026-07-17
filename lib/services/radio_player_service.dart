@@ -5,8 +5,20 @@ import 'package:internetradio/services/radio_player_state.dart';
 
 export 'radio_player_state.dart';
 
+/// Playback API used by [RadioController] (native or test double).
+abstract interface class RadioPlayer {
+  RadioPlayerState get state;
+  Stream<RadioPlayerState> get stateStream;
+  Future<bool> play(String url, {bool applyAudioRouteFix = true});
+  Future<void> stop();
+  Future<void> setMuted(bool muted);
+  Future<void> toggleMute();
+  Future<void> refreshState();
+  void dispose();
+}
+
 /// Dart facade for the native Media3 radio player (Android).
-class RadioPlayerService {
+class RadioPlayerService implements RadioPlayer {
   RadioPlayerService() {
     _eventSubscription = _events.receiveBroadcastStream().listen(
       (event) {

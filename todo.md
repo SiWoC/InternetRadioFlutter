@@ -40,7 +40,7 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 ### 1.2 Dart wrapper
 - [x] `RadioPlayerService` (`play`, `stop`, `setMuted`, `stateStream`)
-- [ ] Single app-wide instance (not per-screen) — via `AppScope` / `RadioController`
+- [x] Single app-wide instance (not per-screen) — via `AppScope` / `RadioController`
 - [x] UI listens through `RadioController` (`ChangeNotifier` or streams)
 
 ---
@@ -72,11 +72,11 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [x] Load on startup, save on change
 
 ### 3.3 `RadioController`
-- [ ] Owns `RadioPlayerService`
-- [ ] `selectStation(index)` → play URL, persist name
-- [ ] `toggleMute()` / `stop()`
-- [ ] Restore last station on cold start (Player mode)
-- [ ] Subscribe to native state stream
+- [x] Owns `RadioPlayerService`
+- [x] `selectStation(index)` → play URL, persist name
+- [x] `toggleMute()` / `stop()`
+- [x] Restore last station on cold start (Player mode)
+- [x] Subscribe to native state stream
 - [ ] **Incoming remote TCP command → dismiss screensaver** (reset idle timer)
 - [ ] Apply **display policy**: wakelock on/off in Player mode
 
@@ -97,18 +97,18 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 ## Layer 4 — UI (4 extracted widgets + MainScreen chrome)
 
 ### 4.1 `StationGrid` + `StationTile`
-- [ ] Scrollable grid (portrait/landscape column count)
-- [ ] Station tile: logo or name fallback
-- [ ] Selected state highlight
+- [x] Scrollable grid (portrait 3 columns / landscape 3 rows)
+- [x] Station tile: logo or name fallback
+- [x] Selected state highlight
 - [ ] Start internatiolisation en/nl
 
 ### 4.2 `MainScreen` (static chrome inline — no separate widget files)
-- [ ] Mute button (playing / muted visuals)
-- [ ] Current station title
-- [ ] Local IP text
-- [ ] Player ↔ Remote toggle
-- [ ] Settings entry
-- [ ] Exit (Android)
+- [x] Mute button (playing / muted visuals)
+- [x] Current station title
+- [x] Local IP text
+- [x] Player ↔ Remote toggle (stub)
+- [x] Settings entry (stub)
+- [x] Exit (Android)
 
 ### 4.3 `SettingsOverlay`
 - [ ] Player IP field + connection test (`PING` → OK / Error / Testing…)
@@ -128,12 +128,12 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 ## Layer 5 — Screens & app shell
 
 ### 5.1 Replace PoC `main.dart`
-- [ ] `MaterialApp` + theme
-- [ ] Root provider / controller injection
-- [ ] Main screen: inline chrome + composes Layer 4 widgets/overlays
+- [x] `MaterialApp` + theme
+- [x] Root provider / controller injection
+- [x] Main screen: inline chrome + composes Layer 4 widgets/overlays
 
 ### 5.2 Layout
-- [ ] Responsive grid (landscape ~3 columns, portrait dynamic rows)
+- [x] Responsive grid (landscape 3 rows + horizontal scroll, portrait 3 columns + vertical scroll)
 
 ### 5.3 Remote mode UI
 - [ ] Remote: station tap → `SELECT_STATION|index`
