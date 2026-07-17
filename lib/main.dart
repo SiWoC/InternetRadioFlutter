@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:internetradio/services/media3_radio_player.dart';
+import 'package:internetradio/services/radio_player_service.dart';
 
 void main() {
   runApp(const InternetRadioApp());
@@ -57,7 +57,7 @@ class RadioPocScreen extends StatefulWidget {
 }
 
 class _RadioPocScreenState extends State<RadioPocScreen> {
-  final _player = Media3RadioPlayer();
+  final _player = RadioPlayerService();
   RadioPlayerState _state = const RadioPlayerState();
   StreamSubscription<RadioPlayerState>? _subscription;
 

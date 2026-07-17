@@ -35,15 +35,18 @@ A Flutter/Dart/Kotlin-based internet radio streaming application designed to run
 
 ```
 lib/
-  main.dart                 # App entry
+  main.dart                 # App entry (PoC UI)
   services/
-    radio_player_service.dart   # PoC: media3_radio_player.dart (rename)
+    radio_player_service.dart   # Dart facade for native audio
     radio_player_state.dart
 android/app/src/main/kotlin/nl/siwoc/internetradio/
-  RadioPlayerManager.kt     # Media3 / ExoPlayer
-  RadioPlayerPlugin.kt      # Platform channel
   MainActivity.kt
-assets/                     # Station config
+  RadioPlayerPlugin.kt      # MethodChannel / EventChannel
+  RadioPlayerHolder.kt      # Shared player singleton
+  RadioPlayerManager.kt     # Media3 / ExoPlayer
+  RadioPlaybackService.kt   # Foreground MediaSessionService + notification
+android/.../java/.../AudioRouteFixer.java
+assets/                     # Station config (planned)
   settings.json
   images/                   # Station logos (PNG)
 ```
@@ -60,25 +63,25 @@ assets/settings.json
 
 Register it in `pubspec.yaml` under `flutter: assets:`.
 
-Format (same as the Unity app):
+Format:
 
 ```json
 {
-  "station": [
+  "stations": [
     {
       "name": "Station Name",
       "url": "https://stream-url.com/stream",
-      "image": "/images/station-logo.png"
+      "imageAssetPath": "assets/images/station-logo.png"
     }
   ]
 }
 ```
 
-- **name** - Display name of the station
+- **name** — Display name
 - **url** — Stream URL (MP3, Icecast, redirects, etc.; verify per station with Media3)
-- **image** — Path under `assets/`, typically `/images/filename.png`
+- **imageAssetPath** — Flutter asset key under `assets/` (optional; UI falls back to name)
 
-The last station in the list is reserved for URL testing in settings (Unity behaviour).
+The last station in the list is reserved for URL testing in settings.
 
 ### Station logos — `assets/images/`
 

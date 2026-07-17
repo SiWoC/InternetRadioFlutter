@@ -1,4 +1,14 @@
 /// Playback state reported by the native Media3 player.
+///
+/// Channel map fields (MethodChannel `getState` / EventChannel updates):
+/// - `url` — current stream URL, or null when stopped
+/// - `playbackState` — `idle` | `buffering` | `ready` | `ended` | `unknown`
+/// - `isPlaying` — ExoPlayer isPlaying
+/// - `isMuted` — output muted (stream may still be connected)
+/// - `error` — last player error message, or null
+/// - `bufferedPositionMs` / `totalBufferedDurationMs` — buffer metrics
+///
+/// Call results such as `play()`'s started bool are **not** part of this map.
 class RadioPlayerState {
   const RadioPlayerState({
     this.url,

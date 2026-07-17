@@ -2,11 +2,13 @@
 
 Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
-**Done (PoC):** Media3 streaming, platform channel, buffer tuning, stream switch teardown, `AudioRouteFixer`.
+**Done (Layer 0):** Media3 streaming, platform channel, buffer tuning, stream switch teardown, `AudioRouteFixer`, foreground `RadioPlaybackService` + notification, lifecycle/ownership, PoC streams verified on Android 8 and Android 14.
+
+**Deferred from Layer 0:** **Display policy** (wakelock / keepScreenOn vs allowScreenOff) — wait until settings UI + screensaver (Layers 2–4). Redirect URLs: Media3 handles them; verify fav stations later.
 
 ---
 
-## Layer 0 — Native audio (Kotlin)
+## Layer 0 — Native audio (Kotlin) ✅
 
 ### 0.1 Foreground playback
 - [x] Add `MediaSessionService` (or `MediaSession` + foreground service)
@@ -20,56 +22,54 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [x] Decide owner: Dart dispose vs service-owned player
 
 ### 0.3 Hardening
-- [ ] Stream error → auto-retry with backoff (optional)
-- [ ] Optional: resolve StreamTheWorld redirect URLs once and cache final URL
+- [x] ~~Stream error → auto-retry~~ → moved to Nice-to-have
+- [x] ~~StreamTheWorld redirect cache~~ → skip (Media3 redirects work; re-check with fav stations)
 
 ### 0.4 Device behaviour
-- [ ] Keep `AudioRouteFixer` on stream start
-- [ ] **Display policy** setting (Player mode): `keepScreenOn` vs `allowScreenOff` — drives wakelock; screensaver only when screen stays on
-- [ ] Test on Android 8 and Android 14 hardware
+- [x] Keep `AudioRouteFixer` on stream start
+- [ ] **Display policy** — deferred to settings + screensaver (see Layers 2–4)
+- [x] Test on Android 8 and Android 14 hardware
 
 ---
 
 ## Layer 1 — Platform bridge
 
 ### 1.1 Channel API
-- [ ] State map = state only (remove `started` from map; keep as `play()` return value)
-- [ ] Document expected state fields
+- [x] State map = state only (`play()` returns bool; failures via error / `state.error`)
+- [x] Document expected state fields (`RadioPlayerState`)
 
 ### 1.2 Dart wrapper
-- [ ] Single app-wide `RadioPlayerService` instance (not per-screen)
-- [ ] Pick state management: `ChangeNotifier` / Riverpod / manual controller
+- [x] `RadioPlayerService` (`play`, `stop`, `setMuted`, `stateStream`)
+- [ ] Single app-wide instance (not per-screen) — via `AppScope` / `RadioController`
+- [x] UI listens through `RadioController` (`ChangeNotifier` or streams)
 
 ---
 
 ## Layer 2 — Domain models (Dart)
 
 ### 2.1 Core types
-- [ ] `RadioStation` (name, url, imageAssetPath)
-- [ ] `OperatingMode` (player | remote)
-- [ ] `DisplayPolicy` (keepScreenOn | allowScreenOff) — Player mode only
-- [ ] `AppSettings` (mode, playerIp, lastStationName, testUrl, displayPolicy)
-- [ ] `RemotePlayerState` (stationIndex, muteState)
+- [x] `RadioStation` (name, url, imageAssetPath)
+- [x] `OperatingMode` / `DisplayPolicy` / `AppSettings` (`lib/models/app_settings.dart`)
+- [x] `RemotePlayerState` (stationIndex, isMuted, isPlaying)
 
 ### 2.2 Station config
-- [ ] Parse `assets/settings.json` → `List<RadioStation>`
-- [ ] Fallback list if JSON missing (Triple J, Q-Music, 538)
-- [ ] Copy assets from Unity: `assets/settings.json`, `assets/images/*`
-- [ ] Last station in list = URL test slot (Unity behaviour)
-- [ ] Register assets in `pubspec.yaml`
+- [x] Load `assets/settings.json` → `List<RadioStation>` (`StationRepository`)
+- [x] Fallback list if JSON missing (Triple J, Q-Music, 538)
+- [x] Add `assets/settings.json` + `assets/images/*`
+- [x] Last station in list = URL test slot
+- [x] Register assets in `pubspec.yaml`
 
 ---
 
 ## Layer 3 — Dart services
 
 ### 3.1 `StationRepository`
-- [ ] Load stations from assets at startup
-- [ ] Resolve image path → asset key
-- [ ] Expose station by index / name
+- [x] Load stations from assets at startup
+- [x] Expose station by index / name (and grid vs URL-test slot)
 
 ### 3.2 `SettingsRepository`
-- [ ] `shared_preferences`: mode, player IP, last station, test URL, display policy
-- [ ] Load on startup, save on change
+- [x] `shared_preferences`: mode, player IP, last station, test URL, display policy
+- [x] Load on startup, save on change
 
 ### 3.3 `RadioController`
 - [ ] Owns `RadioPlayerService`
@@ -167,8 +167,8 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 | # | Scope | Delivers |
 |---|--------|----------|
-| **M1** | 0.x (partial) + 2.x + 3.1–3.3 + 4.1–4.2 + 5.1 | Real stations, main Player UI, mute, persist |
-| **M2** | 0.1–0.2 + 4.4 + 6.1 | Background play, screensaver, daily-use Player |
+| **M1** | Layer 0 ✅ + 2.x + 3.1–3.3 + 4.1–4.2 + 5.1 | Real stations, main Player UI, mute, persist |
+| **M2** | 4.4 + display policy + 6.1 | Screensaver, display policy, daily-use Player |
 | **M3** | 3.4–3.5 + 5.3 + 6.2 | Remote control parity with Unity |
 | **M4** | 6.3–6.4 | Ship-ready |
 
@@ -176,12 +176,13 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 ## Optional (not in Unity)
 
-- [ ] Lock-screen / notification controls (Layer 0.1)
+- [x] Lock-screen / notification controls (Layer 0.1)
 - [ ] Connection status indicator in Remote mode
-- [ ] Resolve redirect URLs before play (StreamTheWorld)
+- [ ] Resolve redirect URLs before play (StreamTheWorld) — only if a fav station fails Media3 redirects
 
 ---
 
 ## Nice-to-have
 
+- [ ] **Stream error → auto-retry with backoff** — native `RadioPlayerManager`: on `PlaybackException`, retry current URL with exponential backoff; reset on successful play / station change
 - [ ] **Wake Player screen on remote command** — when display policy is `allowScreenOff` and the Player screen is asleep, a remote command (station change, mute, etc.) would turn the display on so the UI is visible without pressing the power button. Audio already responds to remote either way; this is display-only. Unnecessary when policy is `keepScreenOn` (default for receiver use).

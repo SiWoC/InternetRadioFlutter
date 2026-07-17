@@ -20,8 +20,7 @@ InternetRadioFlutter/
 │   ├── services/                  # I/O & platform integrations
 │   ├── controllers/               # Application logic (orchestration)
 │   ├── screens/                   # Full-page UI
-│   ├── widgets/                   # Reusable UI pieces
-│   └── utils/                     # Small helpers
+│   └── widgets/                   # Reusable UI pieces
 │
 └── android/app/src/main/
     ├── kotlin/.../internetradio/  # Native audio & platform channel
@@ -61,6 +60,7 @@ flowchart TB
 
   subgraph native [android/kotlin]
     RadioPlayerPlugin
+    RadioPlayerHolder
     RadioPlayerManager
     RadioPlaybackService
   end
@@ -76,8 +76,9 @@ flowchart TB
   SettingsRepository --> AppSettings
   NetworkService --> RemotePlayerState
   RadioPlayerService --> RadioPlayerPlugin
-  RadioPlayerPlugin --> RadioPlayerManager
-  RadioPlaybackService --> RadioPlayerManager
+  RadioPlayerPlugin --> RadioPlayerHolder
+  RadioPlaybackService --> RadioPlayerHolder
+  RadioPlayerHolder --> RadioPlayerManager
 ```
 
 ---
@@ -88,11 +89,11 @@ No Flutter widgets, no platform channels, no file/network I/O.
 
 | Class | Status | Responsibility |
 |-------|--------|----------------|
-| **`RadioStation`** | 🔲 | One station: `name`, `url`, `imageAssetPath`. JSON ↔ asset mapping. |
-| **`OperatingMode`** | 🔲 | Enum: `player` \| `remote`. |
-| **`AppSettings`** | 🔲 | Persisted prefs: mode, player IP, last station name, test URL, **display policy** (Player mode). |
-| **`DisplayPolicy`** | 🔲 | Enum: `keepScreenOn` (screensaver after idle) \| `allowScreenOff` (audio continues; screen may sleep). Player mode only. |
-| **`RemotePlayerState`** | 🔲 | Parsed remote snapshot: station index, muted/playing. From `STATE\|n\|MUTED\|PLAYING`. |
+| **`RadioStation`** | ✅ | One station: `name`, `url`, `imageAssetPath`. JSON via `fromJson` / `listFromSettingsJson`. |
+| **`OperatingMode`** | ✅ | Enum: `player` \| `remote`. |
+| **`AppSettings`** | ✅ | Persisted prefs: mode, player IP, last station name, test URL, display policy. |
+| **`DisplayPolicy`** | ✅ | Enum: `keepScreenOn` \| `allowScreenOff`. Player mode. |
+| **`RemotePlayerState`** | ✅ | Remote snapshot: station index, muted, playing. |
 | **`RadioPlayerState`** | ✅ | Live audio snapshot from native player: url, playbackState, isPlaying, isMuted, buffer, error. DTO from MethodChannel/EventChannel. |
 
 ---
@@ -103,9 +104,9 @@ Talks to assets, disk, network, or native code. No UI.
 
 | Class | Status | Responsibility |
 |-------|--------|----------------|
-| **`RadioPlayerService`** | ✅ (`Media3RadioPlayer` in PoC) | Dart facade for native audio. `play`, `stop`, `setMuted`, `stateStream`. Owns MethodChannel + EventChannel. Name hides Kotlin/Media3 implementation. |
-| **`StationRepository`** | 🔲 | Load `assets/settings.json`, parse stations, fallback list, resolve logo paths. Expose `List<RadioStation>`, lookup by index/name. |
-| **`SettingsRepository`** | 🔲 | Read/write `AppSettings` via `shared_preferences`. |
+| **`RadioPlayerService`** | ✅ | Dart facade for native audio. `play`, `stop`, `setMuted`, `stateStream`. Owns MethodChannel + EventChannel. |
+| **`StationRepository`** | ✅ | Load `assets/settings.json`, parse stations, fallback list. Expose grid stations, URL-test slot, lookup by index/name. |
+| **`SettingsRepository`** | ✅ | Read/write `AppSettings` via `shared_preferences`. |
 | **`NetworkService`** | 🔲 | TCP on port **6435**. Player: run server, dispatch commands. Remote: send commands, poll state. Parse/build protocol strings. |
 | **`NetworkProtocol`** | 🔲 | Static helpers: `ping`, `selectStation(n)`, `mute`, `unmute`, `getState`, `testUrl`, parse `PONG` / `STATE\|…`. Keeps string format in one place. |
 | **`WakelockService`** | 🔲 | Keep screen on when **display policy** = `keepScreenOn` (Player mode). Off when `allowScreenOff` or Remote mode. |
@@ -158,14 +159,6 @@ Extract when repeated, layout-heavy, or a separate layer. Everything else stays 
 
 ---
 
-## `lib/utils/` — helpers
-
-| Class | Status | Responsibility |
-|-------|--------|----------------|
-| **`AssetPaths`** | 🔲 | Constants for `assets/settings.json`, `assets/images/`. |
-
----
-
 ## `lib/main.dart`
 
 | Entry | Status | Responsibility |
@@ -180,8 +173,9 @@ Extract when repeated, layout-heavy, or a separate layer. Everything else stays 
 |-------|--------|----------------|
 | **`MainActivity`** | ✅ | Flutter activity; registers `RadioPlayerPlugin` in `configureFlutterEngine`. |
 | **`RadioPlayerPlugin`** | ✅ | MethodChannel / EventChannel handler; forwards to `RadioPlayerManager`. |
-| **`RadioPlayerManager`** | ✅ | ExoPlayer (Media3): play/stop/mute, live buffer config, stream teardown on switch, state events. |
-| **`RadioPlaybackService`** | 🔲 | Foreground `MediaSessionService`: background playback, notification, owns or shares player instance. |
+| **`RadioPlayerHolder`** | ✅ | Process-wide singleton holder for `RadioPlayerManager` (activity + service share one player). |
+| **`RadioPlayerManager`** | ✅ | ExoPlayer (Media3): play/stop/mute, live buffer config, stream teardown on switch, state events, `AudioRouteFixer` on start. |
+| **`RadioPlaybackService`** | ✅ | Foreground `MediaSessionService`: background playback, media notification, shares player via `RadioPlayerHolder`. |
 | **`AudioRouteFixer`** | ✅ | Java helper: retrigger headphone routing after stream start (Moto-style devices). |
 
 ---
@@ -227,8 +221,8 @@ Extract when repeated, layout-heavy, or a separate layer. Everything else stays 
 
 ## Current vs final file count
 
-**Today (PoC):** 3 Dart files, 3 Kotlin + 1 Java on Android.
+**Today (Layer 0–1 + models):** Dart services + `lib/models/`; native Layer 0 complete.
 
-**Final (approx.):** ~12–16 Dart files across `models`, `services`, `controllers`, `screens`, `widgets` (4), plus 4–5 Kotlin classes when foreground service lands.
+**Final (approx.):** ~12–16 Dart files across `models`, `services`, `controllers`, `screens`, `widgets` (4); native Layer 0 complete.
 
-See [todo.md](../todo.md) for build order (M1 → M4).
+See [todo.md](../todo.md) for build order (M1 → M4). Next: Layer 1 (platform bridge) / Layer 2 (models) toward M1.

@@ -6,8 +6,8 @@ import 'package:internetradio/services/radio_player_state.dart';
 export 'radio_player_state.dart';
 
 /// Dart facade for the native Media3 radio player (Android).
-class Media3RadioPlayer {
-  Media3RadioPlayer() {
+class RadioPlayerService {
+  RadioPlayerService() {
     _eventSubscription = _events.receiveBroadcastStream().listen(
       (event) {
         if (_disposed) {
@@ -44,18 +44,20 @@ class Media3RadioPlayer {
 
   Stream<RadioPlayerState> get stateStream => _stateController.stream;
 
-  /// Starts [url]. Returns false when the same stream is already active.
+  /// Starts [url].
+  ///
+  /// Returns `true` when a stream was (re)started, `false` when [url] was
+  /// already active (noop). Failures throw or appear on [RadioPlayerState.error].
   Future<bool> play(
     String url, {
     bool applyAudioRouteFix = true,
   }) async {
     _assertNotDisposed();
-    final result = await _methods.invokeMethod<Map<dynamic, dynamic>>('play', {
+    final started = await _methods.invokeMethod<bool>('play', {
       'url': url,
       'applyAudioRouteFix': applyAudioRouteFix,
-    });
-    final started = result?['started'] as bool? ?? true;
-    _updateState(RadioPlayerState.fromMap(result ?? {}));
+    }) ?? true;
+    await refreshState();
     return started;
   }
 
@@ -106,7 +108,7 @@ class Media3RadioPlayer {
 
   void _assertNotDisposed() {
     if (_disposed) {
-      throw StateError('Media3RadioPlayer has been disposed');
+      throw StateError('RadioPlayerService has been disposed');
     }
   }
 }

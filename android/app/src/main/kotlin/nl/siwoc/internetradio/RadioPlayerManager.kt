@@ -118,12 +118,13 @@ class RadioPlayerManager(context: Context) {
     }
 
     /**
-     * @return true when playback was (re)started; false when [url] is already active.
+     * @return `true` when a stream was (re)started; `false` when [url] is already
+     * active (noop). Failures are reported via [lastError] / MethodChannel errors.
      */
     fun play(url: String, applyAudioRouteFix: Boolean): Boolean {
         if (url == currentUrl && player.playbackState != Player.STATE_IDLE) {
             player.playWhenReady = true
-            emitState(started = false)
+            emitState()
             return false
         }
 
@@ -160,7 +161,7 @@ class RadioPlayerManager(context: Context) {
             AudioRouteFixer.retriggerAudioRouting(appContext)
         }
 
-        emitState(started = true)
+        emitState()
         return true
     }
 
@@ -191,7 +192,8 @@ class RadioPlayerManager(context: Context) {
         AudioRouteFixer.retriggerAudioRouting(appContext)
     }
 
-    fun currentState(started: Boolean? = null): Map<String, Any?> {
+    /** Snapshot for MethodChannel / EventChannel — playback state only (no call results). */
+    fun currentState(): Map<String, Any?> {
         return buildMap {
             put("url", currentUrl)
             put("playbackState", playbackStateName(player.playbackState))
@@ -200,9 +202,6 @@ class RadioPlayerManager(context: Context) {
             put("error", lastError)
             put("bufferedPositionMs", player.bufferedPosition)
             put("totalBufferedDurationMs", player.totalBufferedDuration)
-            if (started != null) {
-                put("started", started)
-            }
         }
     }
 
@@ -245,8 +244,8 @@ class RadioPlayerManager(context: Context) {
         }
     }
 
-    private fun emitState(started: Boolean? = null) {
-        eventSink?.success(currentState(started))
+    private fun emitState() {
+        eventSink?.success(currentState())
     }
 
     private fun updateNotificationButtons() {
