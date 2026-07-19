@@ -26,7 +26,7 @@ class _FakePlayer implements RadioPlayer {
     playedUrls.add(url);
     _state = RadioPlayerState(
       url: url,
-      playbackState: 'ready',
+      playbackState: PlaybackState.Ready,
       isPlaying: true,
       isMuted: muted,
     );

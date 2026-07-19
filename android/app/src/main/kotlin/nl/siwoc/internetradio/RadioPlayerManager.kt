@@ -236,11 +236,11 @@ class RadioPlayerManager(context: Context) {
 
     private fun playbackStateName(state: Int): String {
         return when (state) {
-            Player.STATE_IDLE -> "idle"
-            Player.STATE_BUFFERING -> "buffering"
-            Player.STATE_READY -> "ready"
-            Player.STATE_ENDED -> "ended"
-            else -> "unknown"
+            Player.STATE_IDLE -> "Idle"
+            Player.STATE_BUFFERING -> "Buffering"
+            Player.STATE_READY -> "Ready"
+            Player.STATE_ENDED -> "Ended"
+            else -> "Unknown"
         }
     }
 

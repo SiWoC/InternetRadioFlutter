@@ -94,7 +94,7 @@ No Flutter widgets, no platform channels, no file/network I/O.
 | **`AppSettings`** | ✅ | Persisted prefs: mode, player IP, last station name, test URL, display policy. |
 | **`DisplayPolicy`** | ✅ | Enum: `keepScreenOn` \| `allowScreenOff`. Player mode. |
 | **`RemotePlayerState`** | ✅ | Remote snapshot: station index, muted, playing. |
-| **`RadioPlayerState`** | ✅ | Live audio snapshot from native player: url, playbackState, isPlaying, isMuted, buffer, error. DTO from MethodChannel/EventChannel. |
+| **`RadioPlayerState`** | ✅ | Live audio snapshot from native player: url, `PlaybackState` (`Idle`\|`Buffering`\|`Ready`\|`Ended`\|`Unknown`), isPlaying, isMuted, buffer, error. DTO from MethodChannel/EventChannel. |
 
 ---
 

@@ -40,19 +40,23 @@ class _MainScreenState extends State<MainScreen> {
       listenable: controller,
       builder: (context, _) {
         final selected = controller.selectedStation;
-        final muted = controller.playerState.isMuted;
-        final hasStream = controller.playerState.url != null;
+        final playerState = controller.playerState;
+        final muted = playerState.isMuted;
+        final hasStream = playerState.url != null;
+        final title = playerState.isPlaying
+            ? (selected?.name ?? '')
+            : playerState.playbackState.name;
 
         return Scaffold(
           backgroundColor: _background,
           body: Column(
             children: [
               _TopChrome(
-                stationTitle: selected?.name ?? '',
+                stationTitle: title,
                 muted: muted,
                 muteEnabled: hasStream,
                 onMute: controller.toggleMute,
-                onExit: () => SystemNavigator.pop(),
+                onExit: () => _exitApp(controller),
               ),
               Expanded(
                 child: StationGrid(
@@ -72,6 +76,11 @@ class _MainScreenState extends State<MainScreen> {
         );
       },
     );
+  }
+
+  Future<void> _exitApp(RadioController controller) async {
+    await controller.stop();
+    SystemNavigator.pop();
   }
 
   Future<void> _selectStation(

@@ -1,8 +1,17 @@
+/// ExoPlayer playback phase reported by native code.
+enum PlaybackState {
+  Idle,
+  Buffering,
+  Ready,
+  Ended,
+  Unknown,
+}
+
 /// Playback state reported by the native Media3 player.
 ///
 /// Channel map fields (MethodChannel `getState` / EventChannel updates):
 /// - `url` — current stream URL, or null when stopped
-/// - `playbackState` — `idle` | `buffering` | `ready` | `ended` | `unknown`
+/// - `playbackState` — [PlaybackState] name (`Idle` | `Buffering` | `Ready` | `Ended` | `Unknown`)
 /// - `isPlaying` — ExoPlayer isPlaying
 /// - `isMuted` — output muted (stream may still be connected)
 /// - `error` — last player error message, or null
@@ -12,7 +21,7 @@
 class RadioPlayerState {
   const RadioPlayerState({
     this.url,
-    this.playbackState = 'idle',
+    this.playbackState = PlaybackState.Idle,
     this.isPlaying = false,
     this.isMuted = false,
     this.error,
@@ -21,7 +30,7 @@ class RadioPlayerState {
   });
 
   final String? url;
-  final String playbackState;
+  final PlaybackState playbackState;
   final bool isPlaying;
   final bool isMuted;
   final String? error;
@@ -31,7 +40,7 @@ class RadioPlayerState {
   factory RadioPlayerState.fromMap(Map<dynamic, dynamic> map) {
     return RadioPlayerState(
       url: map['url'] as String?,
-      playbackState: map['playbackState'] as String? ?? 'idle',
+      playbackState: _parsePlaybackState(map['playbackState'] as String?),
       isPlaying: map['isPlaying'] as bool? ?? false,
       isMuted: map['isMuted'] as bool? ?? false,
       error: map['error'] as String?,
@@ -40,7 +49,7 @@ class RadioPlayerState {
     );
   }
 
-  bool get hasActiveStream => url != null && playbackState != 'idle';
+  bool get hasActiveStream => url != null && playbackState != PlaybackState.Idle;
 
   String get statusLabel {
     if (error != null) {
@@ -49,12 +58,12 @@ class RadioPlayerState {
     if (isPlaying) {
       return isMuted ? 'Playing (muted)' : 'Playing';
     }
-    return playbackState;
+    return playbackState.name;
   }
 
   RadioPlayerState copyWith({
     String? url,
-    String? playbackState,
+    PlaybackState? playbackState,
     bool? isPlaying,
     bool? isMuted,
     String? error,
@@ -71,5 +80,12 @@ class RadioPlayerState {
       totalBufferedDurationMs:
           totalBufferedDurationMs ?? this.totalBufferedDurationMs,
     );
+  }
+
+  static PlaybackState _parsePlaybackState(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return PlaybackState.Idle;
+    }
+    return PlaybackState.values.asNameMap()[raw] ?? PlaybackState.Unknown;
   }
 }
