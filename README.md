@@ -35,10 +35,13 @@ A Flutter/Dart/Kotlin-based internet radio streaming application designed to run
 
 ```
 lib/
-  main.dart                 # App entry (PoC UI)
-  services/
-    radio_player_service.dart   # Dart facade for native audio
-    radio_player_state.dart
+  main.dart
+  app/                      # AppScope wiring
+  models/                   # Pure data types (stations, settings, player/remote state)
+  services/                 # Player facade, repos, TCP, local IP
+  controllers/              # RadioController
+  screens/                  # MainScreen
+  widgets/                  # Station grid/tile, settings overlay
 android/app/src/main/kotlin/nl/siwoc/internetradio/
   MainActivity.kt
   RadioPlayerPlugin.kt      # MethodChannel / EventChannel
@@ -46,7 +49,7 @@ android/app/src/main/kotlin/nl/siwoc/internetradio/
   RadioPlayerManager.kt     # Media3 / ExoPlayer
   RadioPlaybackService.kt   # Foreground MediaSessionService + notification
 android/.../java/.../AudioRouteFixer.java
-assets/                     # Station config (planned)
+assets/
   settings.json
   images/                   # Station logos (PNG)
 ```

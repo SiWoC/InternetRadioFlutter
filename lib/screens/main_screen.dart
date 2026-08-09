@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:internetradio/app/app_scope.dart';
 import 'package:internetradio/controllers/radio_controller.dart';
+import 'package:internetradio/models/app_settings.dart';
 import 'package:internetradio/services/local_network_info.dart';
+import 'package:internetradio/widgets/settings_overlay.dart';
 import 'package:internetradio/widgets/station_grid.dart';
 
 /// Main radio UI — chrome + station grid.
@@ -40,37 +44,59 @@ class _MainScreenState extends State<MainScreen> {
       listenable: controller,
       builder: (context, _) {
         final selected = controller.selectedStation;
-        final playerState = controller.playerState;
-        final muted = playerState.isMuted;
-        final hasStream = playerState.url != null;
-        final title = playerState.isPlaying
-            ? (selected?.name ?? '')
-            : playerState.playbackState.name;
+        final muted = controller.isMuted;
+        final playing = controller.isPlaying;
+        final title = controller.isRemoteMode
+            ? (selected?.name ?? (playing ? '' : 'Remote'))
+            : (playing
+                ? (selected?.name ?? '')
+                : controller.playerState.playbackState.name);
+        final muteEnabled =
+            controller.isRemoteMode || controller.playerState.url != null;
 
         return Scaffold(
           backgroundColor: _background,
-          body: Column(
+          body: Stack(
             children: [
-              _TopChrome(
-                stationTitle: title,
-                muted: muted,
-                muteEnabled: hasStream,
-                onMute: controller.toggleMute,
-                onExit: () => _exitApp(controller),
+              Column(
+                children: [
+                  _TopChrome(
+                    stationTitle: title,
+                    muted: muted,
+                    muteEnabled: muteEnabled,
+                    onMute: () => unawaited(controller.toggleMute()),
+                    onExit: () => _exitApp(controller),
+                  ),
+                  Expanded(
+                    child: StationGrid(
+                      stations: controller.stations.gridStations,
+                      selectedIndex: controller.selectedStationIndex,
+                      onStationSelected: (index) =>
+                          _selectStation(context, controller, index),
+                    ),
+                  ),
+                  _BottomChrome(
+                    localIp: _localIp,
+                    mode: controller.settings.mode,
+                    onToggleMode: () =>
+                        unawaited(controller.toggleOperatingMode()),
+                    onSettings: controller.openSettings,
+                  ),
+                ],
               ),
-              Expanded(
-                child: StationGrid(
-                  stations: controller.stations.gridStations,
-                  selectedIndex: controller.selectedStationIndex,
-                  onStationSelected: (index) =>
-                      _selectStation(context, controller, index),
+              if (controller.isSettingsOpen)
+                Positioned.fill(
+                  child: SettingsOverlay(
+                    initialPlayerIp: controller.settings.playerIp,
+                    bannerMessage: controller.settingsMessage,
+                    onTestConnection: controller.testPlayerConnection,
+                    onPersistIp: controller.savePlayerIp,
+                    onSaveAndClose: (ip) async {
+                      await controller.savePlayerIp(ip);
+                      controller.closeSettings();
+                    },
+                  ),
                 ),
-              ),
-              _BottomChrome(
-                localIp: _localIp,
-                onRemoteStub: () {},
-                onSettingsStub: () {},
-              ),
             ],
           ),
         );
@@ -128,9 +154,7 @@ class _TopChrome extends StatelessWidget {
         child: Row(
           children: [
             _ChromeIconButton(
-              assetPath: muted
-                  ? 'assets/images/mute-muted.png'
-                  : 'assets/images/mute-playing.png',
+              icon: muted ? Icons.volume_off : Icons.volume_up,
               onPressed: muteEnabled ? onMute : null,
               semanticLabel: muted ? 'Unmute' : 'Mute',
             ),
@@ -149,7 +173,7 @@ class _TopChrome extends StatelessWidget {
               ),
             ),
             _ChromeIconButton(
-              assetPath: 'assets/images/exit.png',
+              icon: Icons.exit_to_app,
               onPressed: onExit,
               semanticLabel: 'Exit',
             ),
@@ -163,21 +187,22 @@ class _TopChrome extends StatelessWidget {
 class _BottomChrome extends StatelessWidget {
   const _BottomChrome({
     required this.localIp,
-    required this.onRemoteStub,
-    required this.onSettingsStub,
+    required this.mode,
+    required this.onToggleMode,
+    required this.onSettings,
   });
 
   final String localIp;
-  final VoidCallback onRemoteStub;
-  final VoidCallback onSettingsStub;
+  final OperatingMode mode;
+  final VoidCallback onToggleMode;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
+    final isRemote = mode == OperatingMode.remote;
 
-    // Taller strip in landscape so icons sit above the screen edge;
-    // content is top-aligned inside that strip.
     return SizedBox(
       height: isLandscape ? 80 : 56,
       child: Padding(
@@ -196,15 +221,15 @@ class _BottomChrome extends StatelessWidget {
                 ),
               ),
               _ChromeIconButton(
-                assetPath: 'assets/images/remote-control.png',
-                onPressed: onRemoteStub,
-                semanticLabel: 'Remote mode',
+                icon: isRemote ? Icons.radio : Icons.settings_remote,
+                onPressed: onToggleMode,
+                semanticLabel: isRemote ? 'Player mode' : 'Remote mode',
                 size: 48,
               ),
               const SizedBox(width: 8),
               _ChromeIconButton(
-                assetPath: 'assets/images/settings.png',
-                onPressed: onSettingsStub,
+                icon: Icons.settings,
+                onPressed: onSettings,
                 semanticLabel: 'Settings',
                 size: 48,
               ),
@@ -218,13 +243,13 @@ class _BottomChrome extends StatelessWidget {
 
 class _ChromeIconButton extends StatelessWidget {
   const _ChromeIconButton({
-    required this.assetPath,
+    required this.icon,
     required this.onPressed,
     required this.semanticLabel,
     this.size = 56,
   });
 
-  final String assetPath;
+  final IconData icon;
   final VoidCallback? onPressed;
   final String semanticLabel;
   final double size;
@@ -236,17 +261,7 @@ class _ChromeIconButton extends StatelessWidget {
       tooltip: semanticLabel,
       padding: EdgeInsets.zero,
       constraints: BoxConstraints.tightFor(width: size, height: size),
-      icon: Image.asset(
-        assetPath,
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => Icon(
-          Icons.broken_image,
-          size: size * 0.6,
-          color: Colors.white70,
-        ),
-      ),
+      icon: Icon(icon, size: size * 0.7, color: Colors.white),
     );
   }
 }

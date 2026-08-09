@@ -20,7 +20,7 @@ Future<void> main() async {
     stations: stations,
     settings: settings,
   );
-  await controller.restoreLastStation();
+  await controller.startForCurrentMode();
 
   runApp(InternetRadioApp(controller: controller));
 }

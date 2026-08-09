@@ -81,16 +81,17 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [ ] Apply **display policy**: wakelock on/off in Player mode
 
 ### 3.4 `NetworkService`
-- [ ] TCP port 6435
-- [ ] Player: server — `PING`, `SELECT_STATION|n`, `MUTE`, `UNMUTE`, `GET_STATE`, `TESTURL|url`
-- [ ] Remote: client — send commands, parse `STATE|…`, `PONG`
-- [ ] 2s connection timeout, 2.5s poll interval (Remote)
-- [ ] Local IP helper (bottom-left display)
+- [x] TCP port 6435 (Player listener + client `sendCommand` / `PING`)
+- [x] Player: server — `PING`, `SELECT_STATION|n`, `MUTE`, `UNMUTE`, `GET_STATE`, `TESTURL|url`
+- [x] Remote: client — `PING` (settings Test Connection)
+- [x] Remote: client — send commands, parse `STATE|…`, poll
+- [x] 2s connection timeout, 2.5s poll interval (Remote)
+- [x] Local IP helper (bottom-left display) — `LocalNetworkInfo`
 
 ### 3.5 Mode orchestration
-- [ ] Player mode: TCP listener, local audio, apply display policy (wakelock)
-- [ ] Remote mode: poll player, wakelock off, allow screen sleep
-- [ ] Mode switch: stop listener / poll, update UI rules
+- [x] Player mode: TCP listener (display policy / wakelock still open)
+- [x] Remote mode: poll player (wakelock still open)
+- [x] Mode switch: stop listener / poll, update UI rules
 
 ---
 
@@ -106,15 +107,15 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [x] Mute button (playing / muted visuals)
 - [x] Current station title
 - [x] Local IP text
-- [x] Player ↔ Remote toggle (stub)
-- [x] Settings entry (stub)
+- [x] Player ↔ Remote toggle
+- [x] Settings entry
 - [x] Exit (Android)
 
 ### 4.3 `SettingsOverlay`
-- [ ] Player IP field + connection test (`PING` → OK / Error / Testing…)
+- [x] Player IP field + connection test (`PING` → OK / Error / Testing…)
 - [ ] URL test field (`TESTURL`, last station slot)
 - [ ] **Display policy** toggle (Player mode): keep screen on / allow screen off
-- [ ] Save to `SettingsRepository`
+- [x] Save to `SettingsRepository`
 
 ### 4.4 `ScreensaverOverlay`
 - [ ] 60s inactivity timer (reset on local touch) — logic in `ScreensaverController`
@@ -136,9 +137,9 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [x] Responsive grid (landscape 3 rows + horizontal scroll, portrait 3 columns + vertical scroll)
 
 ### 5.3 Remote mode UI
-- [ ] Remote: station tap → `SELECT_STATION|index`
-- [ ] Remote: mute → `MUTE` / `UNMUTE`
-- [ ] Sync UI from polled state
+- [x] Remote: station tap → `SELECT_STATION|index`
+- [x] Remote: mute → `MUTE` / `UNMUTE`
+- [x] Sync UI from polled state
 
 ---
 
@@ -186,3 +187,4 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 - [ ] **Stream error → auto-retry with backoff** — native `RadioPlayerManager`: on `PlaybackException`, retry current URL with exponential backoff; reset on successful play / station change
 - [ ] **Wake Player screen on remote command** — when display policy is `allowScreenOff` and the Player screen is asleep, a remote command (station change, mute, etc.) would turn the display on so the UI is visible without pressing the power button. Audio already responds to remote either way; this is display-only. Unnecessary when policy is `keepScreenOn` (default for receiver use).
+- STOP from remote to player with confirmation question if player should be stopped too.

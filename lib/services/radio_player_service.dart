@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
-import 'package:internetradio/services/radio_player_state.dart';
-
-export 'radio_player_state.dart';
+import 'package:internetradio/models/radio_player_state.dart';
 
 /// Playback API used by [RadioController] (native or test double).
 abstract interface class RadioPlayer {
