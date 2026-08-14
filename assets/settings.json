@@ -6,6 +6,16 @@
       "imageAssetPath": "assets/images/alltimehits.png"
     },
     {
+      "name": "Hete Hits",
+      "url": "https://mcp-2.mm-stream.nl:8000/stream",
+      "imageAssetPath": "assets/images/hete-hits.png"
+    },
+    {
+      "name": "Radio Ultiem",
+      "url": "https://server-27.stream-server.nl/stream/RadioUltiem",
+      "imageAssetPath": "assets/images/radio-ultiem.png"
+    },
+    {
       "name": "Radio 10 80s Hits",
       "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/TLPSTR20.mp3",
       "imageAssetPath": "assets/images/radio-10-80s-hits.png"

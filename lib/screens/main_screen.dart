@@ -6,6 +6,7 @@ import 'package:internetradio/app/app_scope.dart';
 import 'package:internetradio/controllers/radio_controller.dart';
 import 'package:internetradio/models/app_settings.dart';
 import 'package:internetradio/services/local_network_info.dart';
+import 'package:internetradio/widgets/screensaver_overlay.dart';
 import 'package:internetradio/widgets/settings_overlay.dart';
 import 'package:internetradio/widgets/station_grid.dart';
 
@@ -39,9 +40,10 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context);
+    final screensaver = controller.screensaver;
 
     return ListenableBuilder(
-      listenable: controller,
+      listenable: Listenable.merge([controller, screensaver]),
       builder: (context, _) {
         final selected = controller.selectedStation;
         final muted = controller.isMuted;
@@ -56,55 +58,66 @@ class _MainScreenState extends State<MainScreen> {
 
         return Scaffold(
           backgroundColor: _background,
-          body: Stack(
-            children: [
-              Column(
-                children: [
-                  _TopChrome(
-                    stationTitle: title,
-                    muted: muted,
-                    muteEnabled: muteEnabled,
-                    onMute: () => unawaited(controller.toggleMute()),
-                    onExit: () => _exitApp(controller),
-                  ),
-                  Expanded(
-                    child: StationGrid(
-                      stations: controller.stations.stations,
-                      selectedIndex: controller.selectedStationIndex,
-                      onStationSelected: (index) =>
-                          _selectStation(context, controller, index),
+          body: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => screensaver.onUserActivity(),
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    _TopChrome(
+                      stationTitle: title,
+                      muted: muted,
+                      muteEnabled: muteEnabled,
+                      onMute: () => unawaited(controller.toggleMute()),
+                      onExit: () => _exitApp(controller),
+                    ),
+                    Expanded(
+                      child: StationGrid(
+                        stations: controller.stations.stations,
+                        selectedIndex: controller.selectedStationIndex,
+                        onStationSelected: (index) =>
+                            _selectStation(context, controller, index),
+                      ),
+                    ),
+                    _BottomChrome(
+                      localIp: _localIp,
+                      mode: controller.settings.mode,
+                      onToggleMode: () =>
+                          unawaited(controller.toggleOperatingMode()),
+                      onSettings: controller.openSettings,
+                    ),
+                  ],
+                ),
+                if (controller.isSettingsOpen)
+                  Positioned.fill(
+                    child: SettingsOverlay(
+                      initialPlayerIp: controller.settings.playerIp,
+                      initialTestUrl: controller.settings.testUrl ?? '',
+                      displayPolicy: controller.settings.displayPolicy,
+                      bannerMessage: controller.settingsMessage,
+                      onTestConnection: controller.testPlayerConnection,
+                      onPersistIp: controller.savePlayerIp,
+                      onPlayTestUrl: controller.playTestUrl,
+                      onDisplayPolicyChanged: controller.setDisplayPolicy,
+                      onSaveAndClose: (ip, testUrl) async {
+                        await controller.saveSettings(
+                          playerIp: ip,
+                          testUrl: testUrl,
+                        );
+                        controller.closeSettings();
+                      },
                     ),
                   ),
-                  _BottomChrome(
-                    localIp: _localIp,
-                    mode: controller.settings.mode,
-                    onToggleMode: () =>
-                        unawaited(controller.toggleOperatingMode()),
-                    onSettings: controller.openSettings,
+                if (screensaver.isVisible)
+                  Positioned.fill(
+                    child: ScreensaverOverlay(
+                      station: selected,
+                      onDismiss: screensaver.onUserActivity,
+                    ),
                   ),
-                ],
-              ),
-              if (controller.isSettingsOpen)
-                Positioned.fill(
-                  child: SettingsOverlay(
-                    initialPlayerIp: controller.settings.playerIp,
-                    initialTestUrl: controller.settings.testUrl ?? '',
-                    displayPolicy: controller.settings.displayPolicy,
-                    bannerMessage: controller.settingsMessage,
-                    onTestConnection: controller.testPlayerConnection,
-                    onPersistIp: controller.savePlayerIp,
-                    onPlayTestUrl: controller.playTestUrl,
-                    onDisplayPolicyChanged: controller.setDisplayPolicy,
-                    onSaveAndClose: (ip, testUrl) async {
-                      await controller.saveSettings(
-                        playerIp: ip,
-                        testUrl: testUrl,
-                      );
-                      controller.closeSettings();
-                    },
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         );
       },

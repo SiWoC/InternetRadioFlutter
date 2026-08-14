@@ -10,6 +10,7 @@ import 'package:internetradio/services/network_service.dart';
 import 'package:internetradio/services/radio_player_service.dart';
 import 'package:internetradio/services/settings_repository.dart';
 import 'package:internetradio/services/station_repository.dart';
+import 'package:internetradio/controllers/screensaver_controller.dart';
 import 'package:internetradio/services/wakelock_service.dart';
 
 /// Orchestrates playback, station selection, settings, and Player/Remote mode.
@@ -20,6 +21,7 @@ class RadioController extends ChangeNotifier {
     RadioPlayer? player,
     NetworkService? network,
     ScreenWakelock? wakelock,
+    Duration screensaverIdleTimeout = const Duration(seconds: 60),
   })  : _stations = stations,
         _settings = settings,
         _player = player ?? RadioPlayerService(),
@@ -31,6 +33,10 @@ class RadioController extends ChangeNotifier {
       notifyListeners();
     });
     _playerState = _player.state;
+    screensaver = ScreensaverController(
+      radioController: this,
+      idleTimeout: screensaverIdleTimeout,
+    );
   }
 
   final StationRepository _stations;
@@ -38,6 +44,9 @@ class RadioController extends ChangeNotifier {
   final RadioPlayer _player;
   final NetworkService _network;
   final ScreenWakelock _wakelock;
+
+  /// Idle timer / visibility for the bouncing-logo overlay (Player + keep on).
+  late final ScreensaverController screensaver;
 
   StreamSubscription<RadioPlayerState>? _playerSubscription;
   Timer? _pollTimer;
@@ -415,15 +424,19 @@ class RadioController extends ChangeNotifier {
       case PingCommand():
         return NetworkProtocol.pong;
       case SelectStationCommand(:final index):
+        screensaver.onRemoteCommand();
         await selectStation(index);
         return NetworkProtocol.ok;
       case MuteCommand():
+        screensaver.onRemoteCommand();
         await setMuted(true);
         return NetworkProtocol.ok;
       case UnmuteCommand():
+        screensaver.onRemoteCommand();
         await setMuted(false);
         return NetworkProtocol.ok;
       case TestUrlCommand(:final url):
+        screensaver.onRemoteCommand();
         await playTestUrl(url);
         return NetworkProtocol.ok;
       case GetStateCommand():
@@ -439,6 +452,7 @@ class RadioController extends ChangeNotifier {
       return;
     }
     _disposed = true;
+    screensaver.dispose();
     _stopRemotePoll();
     _playerSubscription?.cancel();
     unawaited(_network.stopListener());

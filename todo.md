@@ -77,7 +77,7 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [x] `toggleMute()` / `stop()`
 - [x] Restore last station on cold start (Player mode)
 - [x] Subscribe to native state stream
-- [ ] **Incoming remote TCP command → dismiss screensaver** (reset idle timer)
+- [x] **Incoming remote TCP command → dismiss screensaver** (reset idle timer)
 - [x] Apply **display policy**: wakelock on/off in Player mode
 
 ### 3.4 `NetworkService`
@@ -118,11 +118,11 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [x] Save to `SettingsRepository`
 
 ### 4.4 `ScreensaverOverlay`
-- [ ] 60s inactivity timer (reset on local touch) — logic in `ScreensaverController`
-- [ ] Full-screen overlay, bouncing station logo (only when display policy = keep screen on)
-- [ ] Disabled while settings open
-- [ ] Tap to dismiss
-- [ ] **Dismiss when Player receives remote command** (`RadioController` → `ScreensaverController`)
+- [x] 60s inactivity timer (reset on local touch) — logic in `ScreensaverController`
+- [x] Full-screen overlay, bouncing station logo (only when display policy = keep screen on)
+- [x] Disabled while settings open
+- [x] Tap to dismiss
+- [x] **Dismiss when Player receives remote command** (`RadioController` → `ScreensaverController`)
 
 ---
 
