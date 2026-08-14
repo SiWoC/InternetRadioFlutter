@@ -4,7 +4,7 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 **Done (Layer 0):** Media3 streaming, platform channel, buffer tuning, stream switch teardown, `AudioRouteFixer`, foreground `RadioPlaybackService` + notification, lifecycle/ownership, PoC streams verified on Android 8 and Android 14.
 
-**Deferred from Layer 0:** **Display policy** (wakelock / keepScreenOn vs allowScreenOff) — wait until settings UI + screensaver (Layers 2–4). Redirect URLs: Media3 handles them; verify fav stations later.
+**Deferred from Layer 0:** Redirect URLs: Media3 handles them; verify fav stations later. Screensaver still Layer 4.4.
 
 ---
 
@@ -27,7 +27,7 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 ### 0.4 Device behaviour
 - [x] Keep `AudioRouteFixer` on stream start
-- [ ] **Display policy** — deferred to settings + screensaver (see Layers 2–4)
+- [x] **Display policy** — settings toggle + wakelock (screensaver is 4.4)
 - [x] Test on Android 8 and Android 14 hardware
 
 ---
@@ -65,7 +65,7 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 ### 3.1 `StationRepository`
 - [x] Load stations from assets at startup
-- [x] Expose station by index / name (and grid vs URL-test slot)
+- [x] Expose station by index / name (including URL-test slot)
 
 ### 3.2 `SettingsRepository`
 - [x] `shared_preferences`: mode, player IP, last station, test URL, display policy
@@ -78,7 +78,7 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [x] Restore last station on cold start (Player mode)
 - [x] Subscribe to native state stream
 - [ ] **Incoming remote TCP command → dismiss screensaver** (reset idle timer)
-- [ ] Apply **display policy**: wakelock on/off in Player mode
+- [x] Apply **display policy**: wakelock on/off in Player mode
 
 ### 3.4 `NetworkService`
 - [x] TCP port 6435 (Player listener + client `sendCommand` / `PING`)
@@ -89,8 +89,8 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [x] Local IP helper (bottom-left display) — `LocalNetworkInfo`
 
 ### 3.5 Mode orchestration
-- [x] Player mode: TCP listener (display policy / wakelock still open)
-- [x] Remote mode: poll player (wakelock still open)
+- [x] Player mode: TCP listener + display-policy wakelock
+- [x] Remote mode: poll player; wakelock off
 - [x] Mode switch: stop listener / poll, update UI rules
 
 ---
@@ -113,8 +113,8 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 ### 4.3 `SettingsOverlay`
 - [x] Player IP field + connection test (`PING` → OK / Error / Testing…)
-- [ ] URL test field (`TESTURL`, last station slot)
-- [ ] **Display policy** toggle (Player mode): keep screen on / allow screen off
+- [x] URL test field (`TESTURL`, last station slot)
+- [x] **Display policy** toggle (Player mode): keep screen on / allow screen off
 - [x] Save to `SettingsRepository`
 
 ### 4.4 `ScreensaverOverlay`
@@ -169,7 +169,7 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 | # | Scope | Delivers |
 |---|--------|----------|
 | **M1** | Layer 0 ✅ + 2.x + 3.1–3.3 + 4.1–4.2 + 5.1 | Real stations, main Player UI, mute, persist |
-| **M2** | 4.4 + display policy + 6.1 | Screensaver, display policy, daily-use Player |
+| **M2** | 4.4 + 6.1 | Screensaver, daily-use Player |
 | **M3** | 3.4–3.5 + 5.3 + 6.2 | Remote control parity with Unity |
 | **M4** | 6.3–6.4 | Ship-ready |
 

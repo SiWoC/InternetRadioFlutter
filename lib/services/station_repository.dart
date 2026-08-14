@@ -15,21 +15,17 @@ class StationRepository {
   /// All stations, including the trailing URL-test slot.
   List<RadioStation> get stations => _stations;
 
-  /// Stations shown in the main grid (everything except the URL-test slot).
-  List<RadioStation> get gridStations {
-    if (_stations.length <= 1) {
-      return _stations;
-    }
-    return _stations.sublist(0, _stations.length - 1);
-  }
-
-  /// Last entry in the list — reserved for Settings URL testing.
+  /// Last entry in the list — URL-test tile (Settings URL may override its stream).
   RadioStation? get urlTestStation {
     if (_stations.isEmpty) {
       return null;
     }
     return _stations.last;
   }
+
+  /// Whether [index] is the trailing URL-test slot.
+  bool isUrlTestIndex(int index) =>
+      _stations.isNotEmpty && index == _stations.length - 1;
 
   int get length => _stations.length;
 

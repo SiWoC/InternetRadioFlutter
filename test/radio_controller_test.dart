@@ -11,6 +11,7 @@ import 'package:internetradio/services/network_service.dart';
 import 'package:internetradio/services/radio_player_service.dart';
 import 'package:internetradio/services/settings_repository.dart';
 import 'package:internetradio/services/station_repository.dart';
+import 'package:internetradio/services/wakelock_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakePlayer implements RadioPlayer {
@@ -104,6 +105,15 @@ class _FakeNetwork extends NetworkService {
   }
 }
 
+class _FakeWakelock implements ScreenWakelock {
+  bool enabled = false;
+
+  @override
+  Future<void> setEnabled(bool value) async {
+    enabled = value;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -111,6 +121,7 @@ void main() {
   late SettingsRepository settings;
   late _FakePlayer player;
   late _FakeNetwork network;
+  late _FakeWakelock wakelock;
   late RadioController controller;
 
   setUp(() async {
@@ -118,15 +129,18 @@ void main() {
     stations = StationRepository(const [
       RadioStation(name: 'All Time Top 40 hits', url: 'https://a.example'),
       RadioStation(name: 'ABC Triple J NSW', url: 'https://triplej.example'),
+      RadioStation(name: 'URL test', url: 'https://json-test.example'),
     ]);
     settings = await SettingsRepository.load();
     player = _FakePlayer();
     network = _FakeNetwork();
+    wakelock = _FakeWakelock();
     controller = RadioController(
       stations: stations,
       settings: settings,
       player: player,
       network: network,
+      wakelock: wakelock,
     );
   });
 
@@ -302,5 +316,97 @@ void main() {
     await controller.stop();
     expect(controller.playerState.url, isNull);
     expect(controller.playerState.isPlaying, isFalse);
+  });
+
+  test('playTestUrl plays locally in Player mode and persists', () async {
+    await controller.playTestUrl(' https://test.example/stream ');
+
+    expect(controller.selectedStationIndex, 2);
+    expect(player.playedUrls, ['https://test.example/stream']);
+    expect(settings.settings.testUrl, 'https://test.example/stream');
+    expect(settings.settings.lastStationName, 'URL test');
+    expect(network.sent, isEmpty);
+  });
+
+  test('playTestUrl sends TESTURL in Remote mode', () async {
+    await controller.savePlayerIp('192.168.1.10');
+    await controller.enterRemoteMode();
+    network.sent.clear();
+    network.onCommand = (_) => NetworkProtocol.ok;
+
+    await controller.playTestUrl('https://test.example/stream');
+
+    expect(player.playedUrls, isEmpty);
+    expect(network.sent, contains(NetworkProtocol.testUrl('https://test.example/stream')));
+    expect(settings.settings.testUrl, 'https://test.example/stream');
+  });
+
+  test('selectStation on URL-test slot uses persisted testUrl', () async {
+    await settings.save(
+      const AppSettings(testUrl: 'https://override.example/stream'),
+    );
+
+    await controller.selectStation(2);
+
+    expect(player.playedUrls, ['https://override.example/stream']);
+    expect(settings.settings.lastStationName, 'URL test');
+  });
+
+  test('selectStation on URL-test slot replays URL after playTestUrl', () async {
+    await controller.playTestUrl('https://test.example/stream');
+    player.playedUrls.clear();
+
+    await controller.selectStation(2);
+
+    expect(player.playedUrls, ['https://test.example/stream']);
+  });
+
+  test('Remote selectStation on URL-test slot sends TESTURL with effective URL',
+      () async {
+    await controller.savePlayerIp('192.168.1.10');
+    await settings.save(
+      settings.settings.copyWith(testUrl: 'https://override.example/stream'),
+    );
+    await controller.enterRemoteMode();
+    network.sent.clear();
+    network.onCommand = (_) => NetworkProtocol.ok;
+
+    await controller.selectStation(2);
+
+    expect(player.playedUrls, isEmpty);
+    expect(
+      network.sent,
+      contains(NetworkProtocol.testUrl('https://override.example/stream')),
+    );
+  });
+
+  test('Player keepScreenOn enables wakelock; Remote and allowScreenOff disable',
+      () async {
+    await controller.startForCurrentMode();
+    expect(wakelock.enabled, isTrue);
+
+    await controller.setDisplayPolicy(DisplayPolicy.allowScreenOff);
+    expect(wakelock.enabled, isFalse);
+
+    await controller.setDisplayPolicy(DisplayPolicy.keepScreenOn);
+    expect(wakelock.enabled, isTrue);
+
+    await controller.savePlayerIp('192.168.1.10');
+    await controller.enterRemoteMode();
+    expect(wakelock.enabled, isFalse);
+
+    await controller.enterPlayerMode();
+    expect(wakelock.enabled, isTrue);
+  });
+
+  test('saveSettings persists IP and can clear test URL', () async {
+    await controller.playTestUrl('https://old.example/stream');
+    await controller.saveSettings(
+      playerIp: '10.0.0.8',
+      testUrl: '',
+    );
+
+    expect(controller.settings.playerIp, '10.0.0.8');
+    expect(controller.settings.testUrl, isNull);
   });
 }

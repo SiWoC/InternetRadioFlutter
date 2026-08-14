@@ -31,8 +31,11 @@ void main() {
       const RadioStation(name: 'URL test', url: 'https://test.example'),
     ]);
 
-    expect(repo.gridStations, hasLength(2));
+    expect(repo.stations, hasLength(3));
+    expect(repo.stations.last.name, 'URL test');
     expect(repo.urlTestStation?.name, 'URL test');
+    expect(repo.isUrlTestIndex(2), isTrue);
+    expect(repo.isUrlTestIndex(1), isFalse);
     expect(repo.byName('B')?.url, 'https://b.example');
     expect(repo.byIndex(0)?.name, 'A');
   });

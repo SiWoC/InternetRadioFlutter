@@ -38,7 +38,7 @@ lib/
   main.dart
   app/                      # AppScope wiring
   models/                   # Pure data types (stations, settings, player/remote state)
-  services/                 # Player facade, repos, TCP, local IP
+  services/                 # Player facade, repos, TCP, wakelock, local IP
   controllers/              # RadioController
   screens/                  # MainScreen
   widgets/                  # Station grid/tile, settings overlay
@@ -84,7 +84,7 @@ Format:
 - **url** — Stream URL (MP3, Icecast, redirects, etc.; verify per station with Media3)
 - **imageAssetPath** — Flutter asset key under `assets/` (optional; UI falls back to name)
 
-The last station in the list is reserved for URL testing in settings.
+The last station in the list is the URL-test tile. Its stream URL comes from this file, or from the persisted Settings URL when that field is filled.
 
 ### Station logos — `assets/images/`
 
@@ -111,7 +111,7 @@ If `settings.json` fails to load, the app should use hardcoded fallbacks:
 - **Station buttons** — Switch station (Player) or send remote command (Remote)
 - **Mute** — Toggle output (stream stays connected)
 - **Player / Remote** — Operating mode
-- **Settings** — Player IP, connection test, URL test
+- **Settings** — Player IP, connection test, URL test, display policy (Player)
 - **Touch** — Resets screensaver timer
 - **Exit** — Close app (Android)
 
@@ -122,9 +122,9 @@ GNU General Public License v3.0 — see [LICENSE](LICENSE).
 ## Notes
 
 - **Don’t add `android/` as a separate workspace root.** The Android module depends on the Flutter project (`flutter.sdk`, Flutter Gradle plugin). Opening it alone breaks Gradle import in Cursor.
-- Player mode keeps the device awake while playing
+- Player mode can keep the screen on (`keepScreenOn` display policy)
 - Screensaver after ~60s inactivity
-- Last station and mode persist between sessions
+- Last station, mode, and display policy persist between sessions
 - Test devices:
   - **Moto G 5S Plus** — 1080 × 1920 (5.5″, 16:9), Android 8
   - **OnePlus Nord 2T** — 1080 × 2400 (6.43″, 20:9), Android 14

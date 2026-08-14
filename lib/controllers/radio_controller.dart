@@ -10,6 +10,7 @@ import 'package:internetradio/services/network_service.dart';
 import 'package:internetradio/services/radio_player_service.dart';
 import 'package:internetradio/services/settings_repository.dart';
 import 'package:internetradio/services/station_repository.dart';
+import 'package:internetradio/services/wakelock_service.dart';
 
 /// Orchestrates playback, station selection, settings, and Player/Remote mode.
 class RadioController extends ChangeNotifier {
@@ -18,10 +19,12 @@ class RadioController extends ChangeNotifier {
     required SettingsRepository settings,
     RadioPlayer? player,
     NetworkService? network,
+    ScreenWakelock? wakelock,
   })  : _stations = stations,
         _settings = settings,
         _player = player ?? RadioPlayerService(),
-        _network = network ?? NetworkService()
+        _network = network ?? NetworkService(),
+        _wakelock = wakelock ?? WakelockService()
   {
     _playerSubscription = _player.stateStream.listen((state) {
       _playerState = state;
@@ -34,6 +37,7 @@ class RadioController extends ChangeNotifier {
   final SettingsRepository _settings;
   final RadioPlayer _player;
   final NetworkService _network;
+  final ScreenWakelock _wakelock;
 
   StreamSubscription<RadioPlayerState>? _playerSubscription;
   Timer? _pollTimer;
@@ -96,7 +100,7 @@ class RadioController extends ChangeNotifier {
       case OperatingMode.player:
         await _activatePlayerMode();
       case OperatingMode.remote:
-        _activateRemoteMode();
+        await _activateRemoteMode();
     }
   }
 
@@ -143,7 +147,7 @@ class RadioController extends ChangeNotifier {
     await _settings.save(
       _settings.settings.copyWith(mode: OperatingMode.remote),
     );
-    _activateRemoteMode();
+    await _activateRemoteMode();
     notifyListeners();
   }
 
@@ -159,15 +163,28 @@ class RadioController extends ChangeNotifier {
   }
 
   Future<void> _activatePlayerMode() async {
+    await _applyDisplayPolicy();
     await startPlayerListener();
     await restoreLastStation();
   }
 
-  void _activateRemoteMode() {
+  Future<void> _activateRemoteMode() async {
+    await _applyDisplayPolicy();
     _startRemotePoll();
   }
 
-  /// Player: plays locally. Remote: sends `SELECT_STATION|index`.
+  /// Player + [DisplayPolicy.keepScreenOn] holds the screen; otherwise it may sleep.
+  Future<void> _applyDisplayPolicy() async {
+    final keepOn = isPlayerMode &&
+        settings.displayPolicy == DisplayPolicy.keepScreenOn;
+    await _wakelock.setEnabled(keepOn);
+  }
+
+  /// Resolves the stream URL, then applies it for the current mode.
+  ///
+  /// URL-test slot uses [AppSettings.testUrl] when set, otherwise the JSON URL.
+  /// Player: plays locally. Remote: `TESTURL` for that slot (store+play on the
+  /// Player), `SELECT_STATION|index` otherwise.
   Future<void> selectStation(int index) async {
     _assertNotDisposed();
     final station = _stations.byIndex(index);
@@ -175,18 +192,27 @@ class RadioController extends ChangeNotifier {
       return;
     }
 
-    if (isRemoteMode) {
-      await _remoteSelectStation(index);
-      return;
-    }
+    final isUrlTest = _stations.isUrlTestIndex(index);
+    final url = _streamUrlFor(station, isUrlTest: isUrlTest);
 
     _selectedStationIndex = index;
+    if (isRemoteMode && _polledState != null) {
+      _polledState = _polledState!.copyWith(stationIndex: index);
+    }
     notifyListeners();
+
+    if (isRemoteMode) {
+      final command = isUrlTest
+          ? NetworkProtocol.testUrl(url)
+          : NetworkProtocol.selectStation(index);
+      await _sendToPlayer(command);
+      return;
+    }
 
     await _settings.save(
       _settings.settings.copyWith(lastStationName: station.name),
     );
-    await _player.play(station.url, title: station.name);
+    await _player.play(url, title: station.name);
   }
 
   Future<void> stop() async {
@@ -215,10 +241,13 @@ class RadioController extends ChangeNotifier {
     await _player.setMuted(muted);
   }
 
-  /// Plays [url] on the URL-test slot and persists it as [AppSettings.testUrl].
-  Future<void> playTestUrl(String url) async {
+  /// Plays [testUrl] on the URL-test slot and persists it as [AppSettings.testUrl].
+  ///
+  /// Player: local play. Remote: sends `TESTURL|url`.
+  Future<void> playTestUrl(String testUrl) async {
     _assertNotDisposed();
-    if (_stations.length == 0) {
+    testUrl = testUrl.trim();
+    if (testUrl.isEmpty || _stations.length == 0) {
       return;
     }
     final index = _stations.length - 1;
@@ -227,9 +256,21 @@ class RadioController extends ChangeNotifier {
     notifyListeners();
 
     await _settings.save(
-      _settings.settings.copyWith(testUrl: url),
+      _settings.settings.copyWith(
+        testUrl: testUrl,
+        lastStationName: station?.name,
+      ),
     );
-    await _player.play(url, title: station?.name);
+
+    if (isRemoteMode) {
+      if (_polledState != null) {
+        _polledState = _polledState!.copyWith(stationIndex: index);
+      }
+      await _sendToPlayer(NetworkProtocol.testUrl(testUrl));
+      return;
+    }
+
+    await _player.play(testUrl, title: station?.name);
   }
 
   /// Restores the last station when in Player mode and a name is stored.
@@ -276,19 +317,51 @@ class RadioController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Persists player IP and test URL (empty URL clears the stored value).
+  Future<void> saveSettings({
+    required String playerIp,
+    required String testUrl,
+  }) async {
+    _assertNotDisposed();
+    testUrl = testUrl.trim();
+    final current = _settings.settings;
+    await _settings.save(
+      AppSettings(
+        mode: current.mode,
+        playerIp: playerIp,
+        lastStationName: current.lastStationName,
+        testUrl: testUrl.isEmpty ? null : testUrl,
+        displayPolicy: current.displayPolicy,
+      ),
+    );
+    notifyListeners();
+  }
+
+  /// Persists [policy] and applies wakelock for the current mode.
+  Future<void> setDisplayPolicy(DisplayPolicy policy) async {
+    _assertNotDisposed();
+    await _settings.save(
+      _settings.settings.copyWith(displayPolicy: policy),
+    );
+    await _applyDisplayPolicy();
+    notifyListeners();
+  }
+
   /// TCP `PING`/`PONG` probe used by Settings → Test Connection.
   Future<bool> testPlayerConnection(String ipAddress) async {
     _assertNotDisposed();
     return _network.ping(ipAddress);
   }
 
-  Future<void> _remoteSelectStation(int index) async {
-    _selectedStationIndex = index;
-    if (_polledState != null) {
-      _polledState = _polledState!.copyWith(stationIndex: index);
+  /// JSON stream URL, or [AppSettings.testUrl] when the URL-test slot has one stored.
+  String _streamUrlFor(RadioStation station, {required bool isUrlTest}) {
+    if (isUrlTest) {
+      final override = _settings.settings.testUrl?.trim();
+      if (override != null && override.isNotEmpty) {
+        return override;
+      }
     }
-    notifyListeners();
-    await _sendToPlayer(NetworkProtocol.selectStation(index));
+    return station.url;
   }
 
   Future<String?> _sendToPlayer(String command) async {
@@ -369,6 +442,7 @@ class RadioController extends ChangeNotifier {
     _stopRemotePoll();
     _playerSubscription?.cancel();
     unawaited(_network.stopListener());
+    unawaited(_wakelock.setEnabled(false));
     _player.dispose();
     super.dispose();
   }

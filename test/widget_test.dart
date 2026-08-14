@@ -7,6 +7,7 @@ import 'package:internetradio/models/radio_station.dart';
 import 'package:internetradio/services/radio_player_service.dart';
 import 'package:internetradio/services/settings_repository.dart';
 import 'package:internetradio/services/station_repository.dart';
+import 'package:internetradio/services/wakelock_service.dart';
 import 'package:internetradio/widgets/station_grid.dart';
 import 'package:internetradio/widgets/station_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,6 +38,11 @@ class _SilentPlayer implements RadioPlayer {
   void dispose() {}
 }
 
+class _SilentWakelock implements ScreenWakelock {
+  @override
+  Future<void> setEnabled(bool enabled) async {}
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -62,6 +68,7 @@ void main() {
       ]),
       settings: settings,
       player: _SilentPlayer(),
+      wakelock: _SilentWakelock(),
     );
   }
 
@@ -71,7 +78,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(StationGrid), findsOneWidget);
-    expect(find.byType(StationTile), findsNWidgets(2));
+    expect(find.byType(StationTile), findsNWidgets(3));
     expect(find.byTooltip('Mute'), findsOneWidget);
     expect(find.byTooltip('Exit'), findsOneWidget);
     expect(find.byTooltip('Remote mode'), findsOneWidget);

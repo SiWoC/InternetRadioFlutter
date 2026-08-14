@@ -105,11 +105,11 @@ Talks to assets, disk, network, or native code. No UI.
 | Class | Status | Responsibility |
 |-------|--------|----------------|
 | **`RadioPlayerService`** | ✅ | Dart facade for native audio. `play`, `stop`, `setMuted`, `stateStream`. Owns MethodChannel + EventChannel. |
-| **`StationRepository`** | ✅ | Load `assets/settings.json`, parse stations, fallback list. Expose grid stations, URL-test slot, lookup by index/name. |
+| **`StationRepository`** | ✅ | Load `assets/settings.json`, parse stations, fallback list. Expose stations (including URL-test slot), lookup by index/name. |
 | **`SettingsRepository`** | ✅ | Read/write `AppSettings` via `shared_preferences`. |
 | **`NetworkService`** | ✅ | TCP on port **6435**. Player: `startListener` / `stopListener`. Remote client: `sendCommand`, `ping`. |
 | **`NetworkProtocol`** | ✅ | Port, timeout, command builders/parsers, `STATE\|index\|muted\|playing` (`0`/`1`). |
-| **`WakelockService`** | 🔲 | Keep screen on when **display policy** = `keepScreenOn` (Player mode). Off when `allowScreenOff` or Remote mode. |
+| **`WakelockService`** | ✅ | Keep screen on when **display policy** = `keepScreenOn` (Player mode). Off when `allowScreenOff` or Remote mode. |
 | **`LocalNetworkInfo`** | ✅ | Local device IP for bottom-left display (Dart `NetworkInterface`). |
 
 ---
@@ -120,7 +120,7 @@ Orchestrates services and exposes state for UI. Single place for “what happens
 
 | Class | Status | Responsibility |
 |-------|--------|----------------|
-| **`RadioController`** | ✅ | **Central controller.** Owns player, repositories, `NetworkService`. Player/Remote mode switch, TCP listener or 2.5s poll, station/mute (local or remote commands), settings open/IP. Wakelock still open. |
+| **`RadioController`** | ✅ | **Central controller.** Owns player, repositories, `NetworkService`, `WakelockService`. Player/Remote mode switch, TCP listener or 2.5s poll, station/mute (local or remote commands), settings open/IP/URL test, display-policy wakelock. |
 | **`ScreensaverController`** | 🔲 | 60s inactivity timer, show/hide screensaver, reset on local touch. Disabled while settings open. **Dismiss on remote command** (via `RadioController`). Only meaningful when display is on (`keepScreenOn`). Uses current station logo from `RadioController`. |
 
 *Alternative:* merge `ScreensaverController` into `RadioController` if you prefer one class — split only if screensaver logic grows.
@@ -152,7 +152,7 @@ Extract when repeated, layout-heavy, or a separate layer. Everything else stays 
 |-------|--------|----------------|----------------|
 | **`StationTile`** | ✅ | Repeated many times | One station button: logo or name fallback, selected highlight, onTap. |
 | **`StationGrid`** | ✅ | Non-trivial layout | Scrollable grid: portrait 3 columns (vertical scroll), landscape 3 rows (horizontal scroll). |
-| **`SettingsOverlay`** | ✅ | Different layer / lifecycle | Modal: player IP, connection test (`PING`), save/close. URL test + display policy still open. |
+| **`SettingsOverlay`** | ✅ | Different layer / lifecycle | Modal: player IP, connection test (`PING`), URL test (`TESTURL`), display policy (Player), save/close. |
 | **`ScreensaverOverlay`** | 🔲 | Different layer / lifecycle | Full-screen bouncing station logo; tap to dismiss. Active only when display policy = `keepScreenOn`. |
 
 ---
@@ -223,4 +223,4 @@ Extract when repeated, layout-heavy, or a separate layer. Everything else stays 
 
 **Final (approx.):** ~12–16 Dart files across `models`, `services`, `controllers`, `screens`, `widgets` (4); native Layer 0 complete.
 
-See [todo.md](../todo.md) for build order (M1 → M4). Next: Layer 1 (platform bridge) / Layer 2 (models) toward M1.
+See [todo.md](../todo.md) for build order (M1 → M4). Next: screensaver overlay (Layer 4.4).

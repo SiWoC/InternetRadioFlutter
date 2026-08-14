@@ -69,7 +69,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   Expanded(
                     child: StationGrid(
-                      stations: controller.stations.gridStations,
+                      stations: controller.stations.stations,
                       selectedIndex: controller.selectedStationIndex,
                       onStationSelected: (index) =>
                           _selectStation(context, controller, index),
@@ -88,11 +88,18 @@ class _MainScreenState extends State<MainScreen> {
                 Positioned.fill(
                   child: SettingsOverlay(
                     initialPlayerIp: controller.settings.playerIp,
+                    initialTestUrl: controller.settings.testUrl ?? '',
+                    displayPolicy: controller.settings.displayPolicy,
                     bannerMessage: controller.settingsMessage,
                     onTestConnection: controller.testPlayerConnection,
                     onPersistIp: controller.savePlayerIp,
-                    onSaveAndClose: (ip) async {
-                      await controller.savePlayerIp(ip);
+                    onPlayTestUrl: controller.playTestUrl,
+                    onDisplayPolicyChanged: controller.setDisplayPolicy,
+                    onSaveAndClose: (ip, testUrl) async {
+                      await controller.saveSettings(
+                        playerIp: ip,
+                        testUrl: testUrl,
+                      );
                       controller.closeSettings();
                     },
                   ),
