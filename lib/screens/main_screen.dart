@@ -52,7 +52,7 @@ class _MainScreenState extends State<MainScreen> {
             ? (selected?.name ?? (playing ? '' : 'Remote'))
             : (playing
                 ? (selected?.name ?? '')
-                : controller.playerState.playbackState.name);
+                : controller.playerState.statusLabel);
         final muteEnabled =
             controller.isRemoteMode || controller.playerState.url != null;
 

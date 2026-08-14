@@ -94,7 +94,7 @@ No Flutter widgets, no platform channels, no file/network I/O.
 | **`AppSettings`** | ✅ | Persisted prefs: mode, player IP, last station name, test URL, display policy. |
 | **`DisplayPolicy`** | ✅ | Enum: `keepScreenOn` \| `allowScreenOff`. Player mode. |
 | **`RemotePlayerState`** | ✅ | Remote snapshot: station index, muted, playing. |
-| **`RadioPlayerState`** | ✅ | Live audio snapshot from native player: url, `PlaybackState` (`Idle`\|`Buffering`\|`Ready`\|`Ended`\|`Unknown`), isPlaying, isMuted, buffer, error. DTO from MethodChannel/EventChannel. |
+| **`RadioPlayerState`** | ✅ | Live audio snapshot from native player: url, `PlaybackState` (`Idle`\|`Buffering`\|`Ready`\|`Ended`\|`Unknown`), isPlaying, isMuted, buffer, error, `retryInSeconds`. DTO from MethodChannel/EventChannel. |
 
 ---
 
@@ -172,7 +172,7 @@ Extract when repeated, layout-heavy, or a separate layer. Everything else stays 
 | **`MainActivity`** | ✅ | Flutter activity; registers `RadioPlayerPlugin` in `configureFlutterEngine`. |
 | **`RadioPlayerPlugin`** | ✅ | MethodChannel / EventChannel handler; forwards to `RadioPlayerManager`. |
 | **`RadioPlayerHolder`** | ✅ | Process-wide singleton holder for `RadioPlayerManager` (activity + service share one player). |
-| **`RadioPlayerManager`** | ✅ | ExoPlayer (Media3): play/stop/mute, live buffer config, stream teardown on switch, state events, `AudioRouteFixer` on start. |
+| **`RadioPlayerManager`** | ✅ | ExoPlayer (Media3): play/stop/mute, live buffer config, stream teardown on switch, transient-error retry with backoff, state events, `AudioRouteFixer` on start. |
 | **`RadioPlaybackService`** | ✅ | Foreground `MediaSessionService`: background playback, media notification, shares player via `RadioPlayerHolder`. |
 | **`AudioRouteFixer`** | ✅ | Java helper: retrigger headphone routing after stream start (Moto-style devices). |
 

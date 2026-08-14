@@ -185,6 +185,6 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 ## Nice-to-have
 
-- [ ] **Stream error → auto-retry with backoff** — native `RadioPlayerManager`: on `PlaybackException`, retry current URL with exponential backoff; reset on successful play / station change
-- [ ] **Wake Player screen on remote command** — when display policy is `allowScreenOff` and the Player screen is asleep, a remote command (station change, mute, etc.) would turn the display on so the UI is visible without pressing the power button. Audio already responds to remote either way; this is display-only. Unnecessary when policy is `keepScreenOn` (default for receiver use).
+- [x] **Stream error → auto-retry with backoff** — native `RadioPlayerManager`: on transient `PlaybackException`, retry current URL with exponential backoff (1s→32s cap); `retryInSeconds` in state / status; reset on successful play / station change / stop
+- [ ] **Wake Player screen on remote command** — when display policy is `allowScreenOff` and the Player screen is asleep, a remote command (station change, mute, etc.) would turn the display on so the UI is visible without pressing the power button. Audio already responds to remote either way; this is display-only. Unnecessary when policy is `keepScreenOn`.
 - STOP from remote to player with confirmation question if player should be stopped too.

@@ -15,6 +15,7 @@ enum PlaybackState {
 /// - `isPlaying` — ExoPlayer isPlaying
 /// - `isMuted` — output muted (stream may still be connected)
 /// - `error` — last player error message, or null
+/// - `retryInSeconds` — countdown until next auto-retry, or null when not retrying
 /// - `bufferedPositionMs` / `totalBufferedDurationMs` — buffer metrics
 ///
 /// Call results such as `play()`'s started bool are **not** part of this map.
@@ -25,6 +26,7 @@ class RadioPlayerState {
     this.isPlaying = false,
     this.isMuted = false,
     this.error,
+    this.retryInSeconds,
     this.bufferedPositionMs = 0,
     this.totalBufferedDurationMs = 0,
   });
@@ -34,6 +36,7 @@ class RadioPlayerState {
   final bool isPlaying;
   final bool isMuted;
   final String? error;
+  final int? retryInSeconds;
   final int bufferedPositionMs;
   final int totalBufferedDurationMs;
 
@@ -44,6 +47,7 @@ class RadioPlayerState {
       isPlaying: map['isPlaying'] as bool? ?? false,
       isMuted: map['isMuted'] as bool? ?? false,
       error: map['error'] as String?,
+      retryInSeconds: map['retryInSeconds'] as int?,
       bufferedPositionMs: map['bufferedPositionMs'] as int? ?? 0,
       totalBufferedDurationMs: map['totalBufferedDurationMs'] as int? ?? 0,
     );
@@ -52,6 +56,9 @@ class RadioPlayerState {
   bool get hasActiveStream => url != null && playbackState != PlaybackState.Idle;
 
   String get statusLabel {
+    if (retryInSeconds != null) {
+      return 'Retry in ${retryInSeconds}s';
+    }
     if (error != null) {
       return 'Error: $error';
     }
@@ -67,6 +74,7 @@ class RadioPlayerState {
     bool? isPlaying,
     bool? isMuted,
     String? error,
+    int? retryInSeconds,
     int? bufferedPositionMs,
     int? totalBufferedDurationMs,
   }) {
@@ -76,6 +84,7 @@ class RadioPlayerState {
       isPlaying: isPlaying ?? this.isPlaying,
       isMuted: isMuted ?? this.isMuted,
       error: error ?? this.error,
+      retryInSeconds: retryInSeconds ?? this.retryInSeconds,
       bufferedPositionMs: bufferedPositionMs ?? this.bufferedPositionMs,
       totalBufferedDurationMs:
           totalBufferedDurationMs ?? this.totalBufferedDurationMs,
