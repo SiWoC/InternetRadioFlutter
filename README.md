@@ -121,6 +121,7 @@ GNU General Public License v3.0 — see [LICENSE](LICENSE).
 
 ## Notes
 
+- **Don’t add `android/` as a separate workspace root.** The Android module depends on the Flutter project (`flutter.sdk`, Flutter Gradle plugin). Opening it alone breaks Gradle import in Cursor.
 - Player mode keeps the device awake while playing
 - Screensaver after ~60s inactivity
 - Last station and mode persist between sessions

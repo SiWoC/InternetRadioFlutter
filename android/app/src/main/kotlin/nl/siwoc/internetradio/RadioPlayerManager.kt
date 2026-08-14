@@ -118,10 +118,11 @@ class RadioPlayerManager(context: Context) {
     }
 
     /**
+     * @param title Station display name for notification / MediaSession; blank uses default.
      * @return `true` when a stream was (re)started; `false` when [url] is already
      * active (noop). Failures are reported via [lastError] / MethodChannel errors.
      */
-    fun play(url: String, applyAudioRouteFix: Boolean): Boolean {
+    fun play(url: String, title: String?, applyAudioRouteFix: Boolean): Boolean {
         if (url == currentUrl && player.playbackState != Player.STATE_IDLE) {
             player.playWhenReady = true
             emitState()
@@ -132,15 +133,15 @@ class RadioPlayerManager(context: Context) {
         lastError = null
         currentUrl = url
 
-        val title = titleForUrl(url)
-        currentTitle = title
+        val displayTitle = title?.takeIf { it.isNotBlank() } ?: DEFAULT_TITLE
+        currentTitle = displayTitle
         val mediaItem =
             MediaItem.Builder()
                 .setUri(url)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
-                        .setTitle(title)
-                        .setArtist("Internet Radio")
+                        .setTitle(displayTitle)
+                        .setArtist(DEFAULT_ARTIST)
                         .build(),
                 )
                 .setLiveConfiguration(
@@ -226,14 +227,6 @@ class RadioPlayerManager(context: Context) {
         player.clearMediaItems()
     }
 
-    private fun titleForUrl(url: String): String {
-        return when {
-            url.contains("triplej", ignoreCase = true) -> "Triple J NSW"
-            url.contains("alltimehits", ignoreCase = true) -> "All Time Hits"
-            else -> "Internet Radio"
-        }
-    }
-
     private fun playbackStateName(state: Int): String {
         return when (state) {
             Player.STATE_IDLE -> "Idle"
@@ -254,5 +247,7 @@ class RadioPlayerManager(context: Context) {
 
     companion object {
         private const val TAG = "RadioPlayerManager"
+        private const val DEFAULT_TITLE = "Internet Radio"
+        private const val DEFAULT_ARTIST = "Internet Radio"
     }
 }

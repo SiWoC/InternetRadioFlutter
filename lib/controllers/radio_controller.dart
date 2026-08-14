@@ -186,7 +186,7 @@ class RadioController extends ChangeNotifier {
     await _settings.save(
       _settings.settings.copyWith(lastStationName: station.name),
     );
-    await _player.play(station.url);
+    await _player.play(station.url, title: station.name);
   }
 
   Future<void> stop() async {
@@ -222,13 +222,14 @@ class RadioController extends ChangeNotifier {
       return;
     }
     final index = _stations.length - 1;
+    final station = _stations.byIndex(index);
     _selectedStationIndex = index;
     notifyListeners();
 
     await _settings.save(
       _settings.settings.copyWith(testUrl: url),
     );
-    await _player.play(url);
+    await _player.play(url, title: station?.name);
   }
 
   /// Restores the last station when in Player mode and a name is stored.

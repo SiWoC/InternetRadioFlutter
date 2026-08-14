@@ -5,6 +5,7 @@
 		}
 	],
 	"settings": {
-		"java.configuration.updateBuildConfiguration": "automatic"
+		"java.configuration.updateBuildConfiguration": "disabled",
+		"java.import.gradle.enabled": false
 	}
 }

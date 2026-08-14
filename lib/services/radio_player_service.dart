@@ -7,7 +7,7 @@ import 'package:internetradio/models/radio_player_state.dart';
 abstract interface class RadioPlayer {
   RadioPlayerState get state;
   Stream<RadioPlayerState> get stateStream;
-  Future<bool> play(String url, {bool applyAudioRouteFix = true});
+  Future<bool> play(String url, {String? title, bool applyAudioRouteFix = true});
   Future<void> stop();
   Future<void> setMuted(bool muted);
   Future<void> toggleMute();
@@ -54,17 +54,19 @@ class RadioPlayerService implements RadioPlayer {
 
   Stream<RadioPlayerState> get stateStream => _stateController.stream;
 
-  /// Starts [url].
+  /// Starts [url] with optional notification/session [title] (station name).
   ///
   /// Returns `true` when a stream was (re)started, `false` when [url] was
   /// already active (noop). Failures throw or appear on [RadioPlayerState.error].
   Future<bool> play(
     String url, {
+    String? title,
     bool applyAudioRouteFix = true,
   }) async {
     _assertNotDisposed();
     final started = await _methods.invokeMethod<bool>('play', {
       'url': url,
+      if (title != null && title.isNotEmpty) 'title': title,
       'applyAudioRouteFix': applyAudioRouteFix,
     }) ?? true;
     await refreshState();

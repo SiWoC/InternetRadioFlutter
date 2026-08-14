@@ -1,0 +1,5 @@
+{
+  // Flutter android/ is not a standalone Gradle root — disable auto-import to avoid startup errors in Cursor.
+  "java.import.gradle.enabled": false,
+  "java.configuration.updateBuildConfiguration": "disabled"
+}

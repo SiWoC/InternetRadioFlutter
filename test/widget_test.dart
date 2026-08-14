@@ -19,7 +19,7 @@ class _SilentPlayer implements RadioPlayer {
   Stream<RadioPlayerState> get stateStream => const Stream.empty();
 
   @override
-  Future<bool> play(String url, {bool applyAudioRouteFix = true}) async => true;
+  Future<bool> play(String url, {String? title, bool applyAudioRouteFix = true}) async => true;
 
   @override
   Future<void> stop() async {}

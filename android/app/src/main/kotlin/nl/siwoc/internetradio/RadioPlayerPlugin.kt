@@ -37,10 +37,11 @@ class RadioPlayerPlugin(
                     result.error("invalid_argument", "url is required", null)
                     return
                 }
+                val title = call.argument<String>("title")
                 val applyAudioRouteFix = call.argument<Boolean>("applyAudioRouteFix") ?: true
                 // true = started a (new) stream; false = same URL already active (noop).
                 // Failures use result.error / state.error — not this bool.
-                result.success(playerManager.play(url, applyAudioRouteFix))
+                result.success(playerManager.play(url, title, applyAudioRouteFix))
             }
             "stop" -> {
                 playerManager.stop()

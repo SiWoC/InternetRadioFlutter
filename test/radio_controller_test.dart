@@ -27,7 +27,7 @@ class _FakePlayer implements RadioPlayer {
   Stream<RadioPlayerState> get stateStream => _stateController.stream;
 
   @override
-  Future<bool> play(String url, {bool applyAudioRouteFix = true}) async {
+  Future<bool> play(String url, {String? title, bool applyAudioRouteFix = true}) async {
     playedUrls.add(url);
     _state = RadioPlayerState(
       url: url,
