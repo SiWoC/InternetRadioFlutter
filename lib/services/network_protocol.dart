@@ -13,6 +13,7 @@ abstract final class NetworkProtocol {
   static const String pong = 'PONG';
   static const String mute = 'MUTE';
   static const String unmute = 'UNMUTE';
+  static const String exit = 'EXIT';
   static const String getState = 'GET_STATE';
   static const String ok = 'OK';
 
@@ -73,6 +74,9 @@ abstract final class NetworkProtocol {
     if (command == unmute) {
       return const UnmuteCommand();
     }
+    if (command == exit) {
+      return const ExitCommand();
+    }
     if (command == getState) {
       return const GetStateCommand();
     }
@@ -125,6 +129,10 @@ final class MuteCommand extends NetworkCommand {
 
 final class UnmuteCommand extends NetworkCommand {
   const UnmuteCommand();
+}
+
+final class ExitCommand extends NetworkCommand {
+  const ExitCommand();
 }
 
 final class GetStateCommand extends NetworkCommand {

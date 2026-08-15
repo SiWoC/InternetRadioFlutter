@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:internetradio/controllers/radio_controller.dart';
 import 'package:internetradio/main.dart';
@@ -50,6 +51,7 @@ class _SilentWakelock implements ScreenWakelock {
 
 class _FakePingNetwork extends NetworkService {
   var pingResult = true;
+  final sent = <String>[];
 
   @override
   Future<void> startListener({
@@ -67,7 +69,8 @@ class _FakePingNetwork extends NetworkService {
     Duration timeout = NetworkProtocol.connectionTimeout,
     int port = NetworkProtocol.port,
   }) async {
-    return null;
+    sent.add(command);
+    return NetworkProtocol.ok;
   }
 
   @override
@@ -147,6 +150,50 @@ void main() {
     expect(find.byIcon(Icons.close), findsNothing);
     expect(find.byIcon(Icons.radio), findsOneWidget);
     expect(find.byTooltip('Player mode'), findsOneWidget);
+  });
+
+  testWidgets('Remote Exit Yes sends EXIT; No does not', (tester) async {
+    final pops = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemNavigator.pop') {
+          pops.add(call.method);
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
+
+    final network = _FakePingNetwork();
+    final controller = await buildController(network: network);
+    await controller.savePlayerIp('192.168.1.10');
+    await controller.enterRemoteMode();
+
+    await tester.pumpWidget(InternetRadioApp(controller: controller));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Exit'));
+    await tester.pumpAndSettle();
+    expect(find.text('Exit the player too?'), findsOneWidget);
+
+    await tester.tap(find.text('No'));
+    await tester.pumpAndSettle();
+    expect(network.sent, isNot(contains(NetworkProtocol.exit)));
+    expect(pops, ['SystemNavigator.pop']);
+
+    pops.clear();
+    await tester.tap(find.byTooltip('Exit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes'));
+    await tester.pumpAndSettle();
+    expect(network.sent, contains(NetworkProtocol.exit));
+    expect(pops, ['SystemNavigator.pop']);
   });
 
   testWidgets('StationGrid uses vertical scroll in portrait', (tester) async {

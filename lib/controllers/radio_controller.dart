@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:internetradio/models/app_settings.dart';
 import 'package:internetradio/models/radio_player_state.dart';
 import 'package:internetradio/models/radio_station.dart';
@@ -21,12 +22,14 @@ class RadioController extends ChangeNotifier {
     RadioPlayer? player,
     NetworkService? network,
     ScreenWakelock? wakelock,
+    Future<void> Function()? exitApp,
     Duration screensaverIdleTimeout = const Duration(seconds: 60),
   })  : _stations = stations,
         _settings = settings,
         _player = player ?? RadioPlayerService(),
         _network = network ?? NetworkService(),
-        _wakelock = wakelock ?? WakelockService()
+        _wakelock = wakelock ?? WakelockService(),
+        _exitApp = exitApp ?? _popApp
   {
     _playerSubscription = _player.stateStream.listen((state) {
       _playerState = state;
@@ -44,6 +47,7 @@ class RadioController extends ChangeNotifier {
   final RadioPlayer _player;
   final NetworkService _network;
   final ScreenWakelock _wakelock;
+  final Future<void> Function() _exitApp;
 
   /// Idle timer / visibility for the bouncing-logo overlay (Player + keep on).
   late final ScreensaverController screensaver;
@@ -256,6 +260,15 @@ class RadioController extends ChangeNotifier {
     await _player.stop();
   }
 
+  /// Remote: sends `EXIT` so the Player stops audio and closes. No-op in Player mode.
+  Future<void> exitRemotePlayer() async {
+    _assertNotDisposed();
+    if (!isRemoteMode) {
+      return;
+    }
+    await _sendToPlayer(NetworkProtocol.exit);
+  }
+
   Future<void> toggleMute() async {
     _assertNotDisposed();
     await setMuted(!isMuted);
@@ -459,6 +472,10 @@ class RadioController extends ChangeNotifier {
         _onMutatingRemoteCommand();
         await setMuted(false);
         return NetworkProtocol.ok;
+      case ExitCommand():
+        await stop(); // stop the player over method channel on the Kotlin side
+        unawaited(Future<void>.delayed(Duration.zero, _exitApp)); // exit the app, which will exit on all layers
+        return NetworkProtocol.ok;
       case TestUrlCommand(:final url):
         _onMutatingRemoteCommand();
         await playTestUrl(url);
@@ -497,5 +514,9 @@ class RadioController extends ChangeNotifier {
     if (_disposed) {
       throw StateError('RadioController has been disposed');
     }
+  }
+
+  static Future<void> _popApp() async {
+    await SystemNavigator.pop();
   }
 }

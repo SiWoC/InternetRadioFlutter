@@ -135,6 +135,7 @@ void main() {
   late _FakePlayer player;
   late _FakeNetwork network;
   late _FakeWakelock wakelock;
+  late int exitAppCount;
   late RadioController controller;
 
   setUp(() async {
@@ -148,12 +149,16 @@ void main() {
     player = _FakePlayer();
     network = _FakeNetwork();
     wakelock = _FakeWakelock();
+    exitAppCount = 0;
     controller = RadioController(
       stations: stations,
       settings: settings,
       player: player,
       network: network,
       wakelock: wakelock,
+      exitApp: () async {
+        exitAppCount++;
+      },
     );
   });
 
@@ -362,6 +367,32 @@ void main() {
     expect(controller.playerState.isPlaying, isFalse);
   });
 
+  test('ExitCommand stops playback and exits the Player app', () async {
+    await controller.selectStation(0);
+    await controller.startPlayerListener();
+
+    await network.handler!(const ExitCommand());
+    expect(player.stopCount, greaterThan(0));
+    expect(controller.playerState.isPlaying, isFalse);
+    expect(exitAppCount, 0);
+
+    await Future<void>.delayed(Duration.zero);
+    expect(exitAppCount, 1);
+  });
+
+  test('exitRemotePlayer sends EXIT only in Remote mode', () async {
+    await controller.savePlayerIp('192.168.1.10');
+    await controller.exitRemotePlayer();
+    expect(network.sent, isEmpty);
+
+    await controller.enterRemoteMode();
+    network.sent.clear();
+    network.onCommand = (_) => NetworkProtocol.ok;
+
+    await controller.exitRemotePlayer();
+    expect(network.sent, contains(NetworkProtocol.exit));
+  });
+
   test('playTestUrl plays locally in Player mode and persists', () async {
     await controller.playTestUrl(' https://test.example/stream ');
 
@@ -455,6 +486,9 @@ void main() {
     expect(player.wakeDisplayCount, 1);
 
     await network.handler!(const SelectStationCommand(0));
+    expect(player.wakeDisplayCount, 2);
+
+    await network.handler!(const ExitCommand());
     expect(player.wakeDisplayCount, 2);
   });
 

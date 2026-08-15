@@ -28,6 +28,7 @@ void main() {
     expect(NetworkProtocol.parseCommand('PING'), isA<PingCommand>());
     expect(NetworkProtocol.parseCommand('MUTE'), isA<MuteCommand>());
     expect(NetworkProtocol.parseCommand('UNMUTE'), isA<UnmuteCommand>());
+    expect(NetworkProtocol.parseCommand('EXIT'), isA<ExitCommand>());
     expect(NetworkProtocol.parseCommand('GET_STATE'), isA<GetStateCommand>());
 
     final select = NetworkProtocol.parseCommand(

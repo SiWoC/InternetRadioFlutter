@@ -286,7 +286,7 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
                         child: FilledButton(
                           onPressed: _busy ? null : _onSave,
                           style: _compactButton,
-                          child: const Text('Save'),
+                          child: const Text('Save and Exit'),
                         ),
                       ),
                     ],

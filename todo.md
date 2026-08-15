@@ -82,7 +82,7 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 ### 3.4 `NetworkService`
 - [x] TCP port 6435 (Player listener + client `sendCommand` / `PING`)
-- [x] Player: server — `PING`, `SELECT_STATION|n`, `MUTE`, `UNMUTE`, `GET_STATE`, `TESTURL|url`
+- [x] Player: server — `PING`, `SELECT_STATION|n`, `MUTE`, `UNMUTE`, `EXIT`, `GET_STATE`, `TESTURL|url`
 - [x] Remote: client — `PING` (settings Test Connection)
 - [x] Remote: client — send commands, parse `STATE|…`, poll
 - [x] 2s connection timeout, 2.5s poll interval (Remote)
@@ -101,7 +101,7 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [x] Scrollable grid (portrait 3 columns / landscape 3 rows)
 - [x] Station tile: logo or name fallback
 - [x] Selected state highlight
-- [ ] Start internatiolisation en/nl
+- [x] ~~Start internatiolisation en/nl~~ → skip (English only)
 
 ### 4.2 `MainScreen` (static chrome inline — no separate widget files)
 - [x] Mute button (playing / muted visuals)
@@ -159,4 +159,4 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 - [X] Resolve redirect URLs before play (StreamTheWorld) — only if a fav station fails Media3 redirects
 - [x] **Stream error → auto-retry with backoff** — native `RadioPlayerManager`: on transient `PlaybackException`, retry current URL with exponential backoff (1s→32s cap); `retryInSeconds` in state / status; reset on successful play / station change / stop
 - [x] **Wake Player screen on remote command** — when display policy is `allowScreenOff` and the Player screen is asleep, a remote command (station change, mute, etc.) would turn the display on so the UI is visible without pressing the power button. Audio already responds to remote either way; this is display-only. Unnecessary when policy is `keepScreenOn`.
-- [ ] STOP from remote to player with confirmation question if player should be stopped too.
+- [x] EXIT from remote to player with confirmation question if player should be exited too.

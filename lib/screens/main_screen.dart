@@ -126,7 +126,32 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _exitApp(RadioController controller) async {
-    await controller.stop();
+    if (controller.isRemoteMode) {
+      final exitPlayer = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Exit the player too?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yes'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted || exitPlayer == null) {
+        return;
+      }
+      if (exitPlayer) {
+        await controller.exitRemotePlayer();
+      }
+    } else {
+      await controller.stop();
+    }
     SystemNavigator.pop();
   }
 
