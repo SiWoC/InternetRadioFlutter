@@ -83,6 +83,7 @@ class _MainScreenState extends State<MainScreen> {
                     _BottomChrome(
                       localIp: _localIp,
                       mode: controller.settings.mode,
+                      playerUnreachable: controller.playerUnreachable,
                       onToggleMode: () =>
                           unawaited(controller.toggleOperatingMode()),
                       onSettings: controller.openSettings,
@@ -208,12 +209,14 @@ class _BottomChrome extends StatelessWidget {
   const _BottomChrome({
     required this.localIp,
     required this.mode,
+    required this.playerUnreachable,
     required this.onToggleMode,
     required this.onSettings,
   });
 
   final String localIp;
   final OperatingMode mode;
+  final bool playerUnreachable;
   final VoidCallback onToggleMode;
   final VoidCallback onSettings;
 
@@ -240,11 +243,10 @@ class _BottomChrome extends StatelessWidget {
                   ),
                 ),
               ),
-              _ChromeIconButton(
-                icon: isRemote ? Icons.radio : Icons.settings_remote,
+              _ModeToggleButton(
+                isRemote: isRemote,
+                showUnreachableOverlay: !isRemote && playerUnreachable,
                 onPressed: onToggleMode,
-                semanticLabel: isRemote ? 'Player mode' : 'Remote mode',
-                size: 48,
               ),
               const SizedBox(width: 8),
               _ChromeIconButton(
@@ -255,6 +257,53 @@ class _BottomChrome extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ModeToggleButton extends StatelessWidget {
+  const _ModeToggleButton({
+    required this.isRemote,
+    required this.showUnreachableOverlay,
+    required this.onPressed,
+  });
+
+  final bool isRemote;
+  final bool showUnreachableOverlay;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 48.0;
+    final iconSize = size * 0.7;
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: isRemote ? 'Player mode' : 'Remote mode',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: size, height: size),
+      icon: SizedBox(
+        width: iconSize,
+        height: iconSize,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(
+              isRemote ? Icons.radio : Icons.settings_remote,
+              size: iconSize,
+              color: Colors.white,
+            ),
+            if (showUnreachableOverlay)
+              Align(
+                alignment: const Alignment(0, -0.85),
+                child: Icon(
+                  Icons.close,
+                  size: iconSize * 0.55,
+                  color: Colors.red,
+                ),
+              ),
+          ],
         ),
       ),
     );

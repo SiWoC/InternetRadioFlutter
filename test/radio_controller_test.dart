@@ -104,13 +104,17 @@ class _FakeNetwork extends NetworkService {
     return onCommand?.call(command);
   }
 
+  var pingResult = true;
+  var pingCount = 0;
+
   @override
   Future<bool> ping(
     String ipAddress, {
     Duration timeout = NetworkProtocol.connectionTimeout,
     int port = NetworkProtocol.port,
   }) async {
-    return true;
+    pingCount++;
+    return pingResult;
   }
 }
 
@@ -238,6 +242,37 @@ void main() {
     expect(controller.isSettingsOpen, isTrue);
     expect(controller.settingsMessage, 'Invalid Player IP-address');
     expect(controller.isPlayerMode, isTrue);
+    expect(network.pingCount, 0);
+    expect(controller.playerUnreachable, isFalse);
+  });
+
+  test('requestRemoteMode ping failure stays Player and marks unreachable',
+      () async {
+    await controller.savePlayerIp('192.168.1.10');
+    network.pingResult = false;
+
+    final switched = await controller.requestRemoteMode();
+
+    expect(switched, isFalse);
+    expect(controller.isPlayerMode, isTrue);
+    expect(controller.playerUnreachable, isTrue);
+    expect(network.pingCount, 1);
+  });
+
+  test('requestRemoteMode ping success enters Remote and clears unreachable',
+      () async {
+    await controller.savePlayerIp('192.168.1.10');
+    network.pingResult = false;
+    await controller.requestRemoteMode();
+    expect(controller.playerUnreachable, isTrue);
+
+    network.pingResult = true;
+    final switched = await controller.requestRemoteMode();
+
+    expect(switched, isTrue);
+    expect(controller.isRemoteMode, isTrue);
+    expect(controller.playerUnreachable, isFalse);
+    expect(network.pingCount, 2);
   });
 
   test('enterRemoteMode stops local audio and sends remote commands', () async {

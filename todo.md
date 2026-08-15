@@ -143,48 +143,20 @@ Bottom-up plan after the Media3 PoC. Build from native → Dart services → UI.
 
 ---
 
-## Layer 6 — Integration & polish
-
-### 6.1 End-to-end Player
-- [ ] Full station list from `settings.json`
-- [ ] Mute, screensaver, persist station, background audio
-
-### 6.2 End-to-end Remote + Player
-- [ ] Two phones on same LAN
-- [ ] Mode switch, IP setup, poll sync
-
-### 6.3 README / build
-- [ ] Release APK signing
-- [ ] Isolate `Temp/` from release builds if desired
-
-### 6.4 Tests (minimal)
-- [ ] JSON parse + fallback stations
-- [ ] TCP protocol encode/decode
-- [ ] Widget smoke: main screen loads stations
-
----
-
 ## Milestones
 
 | # | Scope | Delivers |
 |---|--------|----------|
 | **M1** | Layer 0 ✅ + 2.x + 3.1–3.3 + 4.1–4.2 + 5.1 | Real stations, main Player UI, mute, persist |
-| **M2** | 4.4 + 6.1 | Screensaver, daily-use Player |
+| **M2** | 4.4 | Screensaver, daily-use Player |
 | **M3** | 3.4–3.5 + 5.3 + 6.2 | Remote control parity with Unity |
-| **M4** | 6.3–6.4 | Ship-ready |
-
----
-
-## Optional (not in Unity)
-
-- [x] Lock-screen / notification controls (Layer 0.1)
-- [ ] Connection status indicator in Remote mode
-- [ ] Resolve redirect URLs before play (StreamTheWorld) — only if a fav station fails Media3 redirects
 
 ---
 
 ## Nice-to-have
 
+- [X] Connection status indicator when trying to switch to Remote mode
+- [X] Resolve redirect URLs before play (StreamTheWorld) — only if a fav station fails Media3 redirects
 - [x] **Stream error → auto-retry with backoff** — native `RadioPlayerManager`: on transient `PlaybackException`, retry current URL with exponential backoff (1s→32s cap); `retryInSeconds` in state / status; reset on successful play / station change / stop
 - [x] **Wake Player screen on remote command** — when display policy is `allowScreenOff` and the Player screen is asleep, a remote command (station change, mute, etc.) would turn the display on so the UI is visible without pressing the power button. Audio already responds to remote either way; this is display-only. Unnecessary when policy is `keepScreenOn`.
 - [ ] STOP from remote to player with confirmation question if player should be stopped too.

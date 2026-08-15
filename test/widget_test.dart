@@ -4,6 +4,8 @@ import 'package:internetradio/controllers/radio_controller.dart';
 import 'package:internetradio/main.dart';
 import 'package:internetradio/models/radio_player_state.dart';
 import 'package:internetradio/models/radio_station.dart';
+import 'package:internetradio/services/network_protocol.dart';
+import 'package:internetradio/services/network_service.dart';
 import 'package:internetradio/services/radio_player_service.dart';
 import 'package:internetradio/services/settings_repository.dart';
 import 'package:internetradio/services/station_repository.dart';
@@ -46,10 +48,42 @@ class _SilentWakelock implements ScreenWakelock {
   Future<void> setEnabled(bool enabled) async {}
 }
 
+class _FakePingNetwork extends NetworkService {
+  var pingResult = true;
+
+  @override
+  Future<void> startListener({
+    required NetworkCommandHandler onCommand,
+    int port = NetworkProtocol.port,
+  }) async {}
+
+  @override
+  Future<void> stopListener() async {}
+
+  @override
+  Future<String?> sendCommand(
+    String ipAddress,
+    String command, {
+    Duration timeout = NetworkProtocol.connectionTimeout,
+    int port = NetworkProtocol.port,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<bool> ping(
+    String ipAddress, {
+    Duration timeout = NetworkProtocol.connectionTimeout,
+    int port = NetworkProtocol.port,
+  }) async {
+    return pingResult;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  Future<RadioController> buildController() async {
+  Future<RadioController> buildController({NetworkService? network}) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await SettingsRepository.load();
     return RadioController(
@@ -72,6 +106,7 @@ void main() {
       settings: settings,
       player: _SilentPlayer(),
       wakelock: _SilentWakelock(),
+      network: network,
     );
   }
 
@@ -86,6 +121,32 @@ void main() {
     expect(find.byTooltip('Exit'), findsOneWidget);
     expect(find.byTooltip('Remote mode'), findsOneWidget);
     expect(find.byTooltip('Settings'), findsOneWidget);
+  });
+
+  testWidgets('failed remote ping shows close until a later tap connects',
+      (tester) async {
+    final network = _FakePingNetwork()..pingResult = false;
+    final controller = await buildController(network: network);
+    await controller.savePlayerIp('192.168.1.10');
+
+    await tester.pumpWidget(InternetRadioApp(controller: controller));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.close), findsNothing);
+
+    await tester.tap(find.byTooltip('Remote mode'));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.close), findsOneWidget);
+    expect(find.byIcon(Icons.settings_remote), findsOneWidget);
+
+    network.pingResult = true;
+    await tester.tap(find.byTooltip('Remote mode'));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.close), findsNothing);
+    expect(find.byIcon(Icons.radio), findsOneWidget);
+    expect(find.byTooltip('Player mode'), findsOneWidget);
   });
 
   testWidgets('StationGrid uses vertical scroll in portrait', (tester) async {

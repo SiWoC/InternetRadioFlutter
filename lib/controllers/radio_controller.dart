@@ -57,6 +57,8 @@ class RadioController extends ChangeNotifier {
   String? _settingsMessage;
   bool _disposed = false;
   bool _remoteCommandInFlight = false;
+  bool _modeSwitchInFlight = false;
+  bool _playerUnreachable = false;
 
   StationRepository get stations => _stations;
 
@@ -65,6 +67,9 @@ class RadioController extends ChangeNotifier {
   bool get isPlayerMode => settings.mode == OperatingMode.player;
 
   bool get isRemoteMode => settings.mode == OperatingMode.remote;
+
+  /// Failed tap-to-switch `PING`; stays set until Remote mode is entered.
+  bool get playerUnreachable => _playerUnreachable;
 
   /// True while [SettingsOverlay] is visible (screensaver must stay off).
   bool get isSettingsOpen => _settingsOpen;
@@ -131,18 +136,36 @@ class RadioController extends ChangeNotifier {
   /// Toggles Player ↔ Remote. Empty player IP opens Settings with a message.
   Future<void> toggleOperatingMode() async {
     _assertNotDisposed();
-    if (isRemoteMode) {
-      await enterPlayerMode();
-    } else {
-      await requestRemoteMode();
+    if (_modeSwitchInFlight) {
+      return;
+    }
+    _modeSwitchInFlight = true;
+    try {
+      if (isRemoteMode) {
+        await enterPlayerMode();
+      } else {
+        await requestRemoteMode();
+      }
+    } finally {
+      _modeSwitchInFlight = false;
     }
   }
 
-  /// Enters Remote when [AppSettings.playerIp] is set; otherwise opens Settings.
+  /// Enters Remote when the player IP is set and `PING` succeeds.
+  ///
+  /// Empty IP opens Settings. A failed ping stays in Player and sets
+  /// [playerUnreachable] (red cross on the remote icon) until a later tap
+  /// connects.
   Future<bool> requestRemoteMode() async {
     _assertNotDisposed();
     if (settings.playerIp.trim().isEmpty) {
       openSettings(message: 'Invalid Player IP-address');
+      return false;
+    }
+    final reachable = await _network.ping(settings.playerIp);
+    if (!reachable) {
+      _playerUnreachable = true;
+      notifyListeners();
       return false;
     }
     await enterRemoteMode();
@@ -151,6 +174,7 @@ class RadioController extends ChangeNotifier {
 
   Future<void> enterRemoteMode() async {
     _assertNotDisposed();
+    _playerUnreachable = false;
     await stopPlayerListener();
     await _player.stop();
     await _settings.save(
