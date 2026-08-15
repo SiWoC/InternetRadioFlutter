@@ -12,6 +12,9 @@ abstract interface class RadioPlayer {
   Future<void> setMuted(bool muted);
   Future<void> toggleMute();
   Future<void> refreshState();
+
+  /// Turns the display on briefly (Player when screen may sleep).
+  Future<void> wakeDisplay();
   void dispose();
 }
 
@@ -100,6 +103,16 @@ class RadioPlayerService implements RadioPlayer {
   Future<void> retriggerAudioRouting() {
     _assertNotDisposed();
     return _methods.invokeMethod<void>('retriggerAudioRouting');
+  }
+
+  @override
+  Future<void> wakeDisplay() async {
+    _assertNotDisposed();
+    try {
+      await _methods.invokeMethod<void>('wakeDisplay');
+    } on PlatformException {
+      // Best-effort: audio already applied; display wake may fail if restricted.
+    }
   }
 
   void dispose() {

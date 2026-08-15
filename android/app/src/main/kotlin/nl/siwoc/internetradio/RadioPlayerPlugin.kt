@@ -10,6 +10,7 @@ class RadioPlayerPlugin(
     activity: Activity,
     messenger: BinaryMessenger,
 ) {
+    private val activity = activity
     private val playerManager = RadioPlayerHolder.getInstance(activity)
     private val methodChannel = MethodChannel(messenger, METHOD_CHANNEL)
     private val eventChannel = EventChannel(messenger, EVENT_CHANNEL)
@@ -59,6 +60,10 @@ class RadioPlayerPlugin(
             "getState" -> result.success(playerManager.currentState())
             "retriggerAudioRouting" -> {
                 playerManager.retriggerAudioRouting()
+                result.success(null)
+            }
+            "wakeDisplay" -> {
+                ScreenWake.pulse(activity)
                 result.success(null)
             }
             else -> result.notImplemented()

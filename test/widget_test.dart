@@ -35,6 +35,9 @@ class _SilentPlayer implements RadioPlayer {
   Future<void> refreshState() async {}
 
   @override
+  Future<void> wakeDisplay() async {}
+
+  @override
   void dispose() {}
 }
 

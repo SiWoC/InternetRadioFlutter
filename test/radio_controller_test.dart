@@ -20,6 +20,7 @@ class _FakePlayer implements RadioPlayer {
   RadioPlayerState _state = const RadioPlayerState();
   bool muted = false;
   var stopCount = 0;
+  var wakeDisplayCount = 0;
 
   @override
   RadioPlayerState get state => _state;
@@ -61,6 +62,11 @@ class _FakePlayer implements RadioPlayer {
   Future<void> refreshState() async {}
 
   @override
+  Future<void> wakeDisplay() async {
+    wakeDisplayCount++;
+  }
+
+  @override
   void dispose() {
     _stateController.close();
   }
@@ -69,6 +75,7 @@ class _FakePlayer implements RadioPlayer {
 class _FakeNetwork extends NetworkService {
   final sent = <String>[];
   String? Function(String command)? onCommand;
+  NetworkCommandHandler? handler;
   var listenerStarted = false;
 
   @override
@@ -77,11 +84,13 @@ class _FakeNetwork extends NetworkService {
     int port = NetworkProtocol.port,
   }) async {
     listenerStarted = true;
+    handler = onCommand;
   }
 
   @override
   Future<void> stopListener() async {
     listenerStarted = false;
+    handler = null;
   }
 
   @override
@@ -397,6 +406,29 @@ void main() {
 
     await controller.enterPlayerMode();
     expect(wakelock.enabled, isTrue);
+  });
+
+  test('allowScreenOff wakes display on mutating remote command only', () async {
+    await controller.setDisplayPolicy(DisplayPolicy.allowScreenOff);
+    await controller.startPlayerListener();
+
+    await network.handler!(const MuteCommand());
+    expect(player.wakeDisplayCount, 1);
+
+    await network.handler!(const PingCommand());
+    await network.handler!(const GetStateCommand());
+    expect(player.wakeDisplayCount, 1);
+
+    await network.handler!(const SelectStationCommand(0));
+    expect(player.wakeDisplayCount, 2);
+  });
+
+  test('keepScreenOn does not wake display on remote command', () async {
+    await controller.setDisplayPolicy(DisplayPolicy.keepScreenOn);
+    await controller.startPlayerListener();
+
+    await network.handler!(const MuteCommand());
+    expect(player.wakeDisplayCount, 0);
   });
 
   test('saveSettings persists IP and can clear test URL', () async {

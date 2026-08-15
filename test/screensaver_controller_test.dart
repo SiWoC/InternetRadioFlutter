@@ -58,6 +58,9 @@ class _FakePlayer implements RadioPlayer {
   Future<void> refreshState() async {}
 
   @override
+  Future<void> wakeDisplay() async {}
+
+  @override
   void dispose() {
     _stateController.close();
   }

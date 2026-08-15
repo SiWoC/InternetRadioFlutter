@@ -424,25 +424,33 @@ class RadioController extends ChangeNotifier {
       case PingCommand():
         return NetworkProtocol.pong;
       case SelectStationCommand(:final index):
-        screensaver.onRemoteCommand();
+        _onMutatingRemoteCommand();
         await selectStation(index);
         return NetworkProtocol.ok;
       case MuteCommand():
-        screensaver.onRemoteCommand();
+        _onMutatingRemoteCommand();
         await setMuted(true);
         return NetworkProtocol.ok;
       case UnmuteCommand():
-        screensaver.onRemoteCommand();
+        _onMutatingRemoteCommand();
         await setMuted(false);
         return NetworkProtocol.ok;
       case TestUrlCommand(:final url):
-        screensaver.onRemoteCommand();
+        _onMutatingRemoteCommand();
         await playTestUrl(url);
         return NetworkProtocol.ok;
       case GetStateCommand():
         return NetworkProtocol.encodeState(remotePlayerState);
       case InvalidCommand(:final message):
         return NetworkProtocol.error(message);
+    }
+  }
+
+  /// Screensaver dismiss + optional display wake when the screen may be off.
+  void _onMutatingRemoteCommand() {
+    screensaver.onRemoteCommand();
+    if (settings.displayPolicy == DisplayPolicy.allowScreenOff) {
+      unawaited(_player.wakeDisplay());
     }
   }
 
