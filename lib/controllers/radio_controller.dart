@@ -104,12 +104,54 @@ class RadioController extends ChangeNotifier {
       stationIndex: _selectedStationIndex ?? 0,
       isMuted: _playerState.isMuted,
       isPlaying: _playerState.isPlaying,
+      stationTitle: chromeStationTitle,
+      nowPlaying: chromeNowPlaying,
     );
   }
 
-  bool get isMuted => remotePlayerState.isMuted;
+  bool get isMuted => isRemoteMode
+      ? remotePlayerState.isMuted
+      : _playerState.isMuted;
 
-  bool get isPlaying => remotePlayerState.isPlaying;
+  bool get isPlaying => isRemoteMode
+      ? remotePlayerState.isPlaying
+      : _playerState.isPlaying;
+
+  /// Top-chrome line 1: stream station name when playing, else config name or status.
+  String get chromeStationTitle {
+    if (isRemoteMode) {
+      final fromPlayer = remotePlayerState.stationTitle?.trim();
+      if (fromPlayer != null && fromPlayer.isNotEmpty) {
+        return fromPlayer;
+      }
+      return selectedStation?.name ?? (isPlaying ? '' : 'Waiting for player');
+    }
+    if (!isPlaying) {
+      return playerState.statusLabel;
+    }
+    final fromStream = playerState.streamStationName?.trim();
+    if (fromStream != null && fromStream.isNotEmpty) {
+      return fromStream;
+    }
+    return selectedStation?.name ?? '';
+  }
+
+  /// Top-chrome line 2: now-playing from the stream. Null when there is nothing to show.
+  String? get chromeNowPlaying {
+    if (!isPlaying) {
+      return null;
+    }
+    final raw = isRemoteMode
+        ? remotePlayerState.nowPlaying?.trim()
+        : playerState.nowPlaying?.trim();
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    if (raw.toLowerCase() == chromeStationTitle.toLowerCase()) {
+      return null;
+    }
+    return raw;
+  }
 
   /// Applies persisted [OperatingMode]: Player listens + restores; Remote polls.
   Future<void> startForCurrentMode() async {

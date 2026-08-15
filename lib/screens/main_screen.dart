@@ -6,6 +6,7 @@ import 'package:internetradio/app/app_scope.dart';
 import 'package:internetradio/controllers/radio_controller.dart';
 import 'package:internetradio/models/app_settings.dart';
 import 'package:internetradio/services/local_network_info.dart';
+import 'package:internetradio/widgets/marquee_text.dart';
 import 'package:internetradio/widgets/screensaver_overlay.dart';
 import 'package:internetradio/widgets/settings_overlay.dart';
 import 'package:internetradio/widgets/station_grid.dart';
@@ -47,12 +48,8 @@ class _MainScreenState extends State<MainScreen> {
       builder: (context, _) {
         final selected = controller.selectedStation;
         final muted = controller.isMuted;
-        final playing = controller.isPlaying;
-        final title = controller.isRemoteMode
-            ? (selected?.name ?? (playing ? '' : 'Remote'))
-            : (playing
-                ? (selected?.name ?? '')
-                : controller.playerState.statusLabel);
+        final stationTitle = controller.chromeStationTitle;
+        final nowPlaying = controller.chromeNowPlaying;
         final muteEnabled =
             controller.isRemoteMode || controller.playerState.url != null;
 
@@ -66,7 +63,8 @@ class _MainScreenState extends State<MainScreen> {
                 Column(
                   children: [
                     _TopChrome(
-                      stationTitle: title,
+                      stationTitle: stationTitle,
+                      nowPlaying: nowPlaying,
                       muted: muted,
                       muteEnabled: muteEnabled,
                       onMute: () => unawaited(controller.toggleMute()),
@@ -176,6 +174,7 @@ class _MainScreenState extends State<MainScreen> {
 class _TopChrome extends StatelessWidget {
   const _TopChrome({
     required this.stationTitle,
+    required this.nowPlaying,
     required this.muted,
     required this.muteEnabled,
     required this.onMute,
@@ -183,6 +182,7 @@ class _TopChrome extends StatelessWidget {
   });
 
   final String stationTitle;
+  final String? nowPlaying;
   final bool muted;
   final bool muteEnabled;
   final VoidCallback onMute;
@@ -192,11 +192,26 @@ class _TopChrome extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
+    final nowPlayingLine = nowPlaying;
+    final hasNowPlaying =
+        nowPlayingLine != null && nowPlayingLine.isNotEmpty;
+    final stationStyle = TextStyle(
+      color: Colors.white,
+      fontSize: isLandscape
+          ? (hasNowPlaying ? 20 : 24)
+          : (hasNowPlaying ? 22 : 28),
+      fontWeight: FontWeight.w600,
+    );
+    final nowPlayingStyle = TextStyle(
+      color: Colors.white,
+      fontSize: isLandscape ? 14 : 16,
+      fontWeight: FontWeight.w400,
+    );
 
     return Padding(
       padding: EdgeInsets.fromLTRB(12, isLandscape ? 4 : 8, 12, 0),
       child: SizedBox(
-        height: isLandscape ? 56 : 72,
+        height: isLandscape ? 72 : 84,
         child: Row(
           children: [
             _ChromeIconButton(
@@ -205,17 +220,28 @@ class _TopChrome extends StatelessWidget {
               semanticLabel: muted ? 'Unmute' : 'Mute',
             ),
             Expanded(
-              child: Text(
-                stationTitle,
-                textAlign: TextAlign.center,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: isLandscape ? 24 : 28,
-                  fontWeight: FontWeight.w600,
-                  height: 1.1,
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: MarqueeText(
+                      text: stationTitle,
+                      style: stationStyle,
+                      velocity: 30,
+                    ),
+                  ),
+                  if (hasNowPlaying) ...[
+                    const SizedBox(height: 2),
+                    SizedBox(
+                      width: double.infinity,
+                      child: MarqueeText(
+                        text: nowPlayingLine,
+                        style: nowPlayingStyle,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             _ChromeIconButton(

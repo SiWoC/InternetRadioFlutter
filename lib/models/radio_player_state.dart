@@ -17,6 +17,8 @@ enum PlaybackState {
 /// - `error` — last player error message, or null
 /// - `retryInSeconds` — countdown until next auto-retry, or null when not retrying
 /// - `bufferedPositionMs` / `totalBufferedDurationMs` — buffer metrics
+/// - `streamStationName` — ICY `icy-name` / MediaMetadata.station when the stream sends it
+/// - `nowPlaying` — current track line (`Artist - Title` or ICY StreamTitle)
 ///
 /// Call results such as `play()`'s started bool are **not** part of this map.
 class RadioPlayerState {
@@ -29,6 +31,8 @@ class RadioPlayerState {
     this.retryInSeconds,
     this.bufferedPositionMs = 0,
     this.totalBufferedDurationMs = 0,
+    this.streamStationName,
+    this.nowPlaying,
   });
 
   final String? url;
@@ -40,6 +44,12 @@ class RadioPlayerState {
   final int bufferedPositionMs;
   final int totalBufferedDurationMs;
 
+  /// Station name from the stream (ICY `icy-name`), when present.
+  final String? streamStationName;
+
+  /// Now-playing line from the stream (ICY StreamTitle or artist + title).
+  final String? nowPlaying;
+
   factory RadioPlayerState.fromMap(Map<dynamic, dynamic> map) {
     return RadioPlayerState(
       url: map['url'] as String?,
@@ -50,6 +60,8 @@ class RadioPlayerState {
       retryInSeconds: map['retryInSeconds'] as int?,
       bufferedPositionMs: map['bufferedPositionMs'] as int? ?? 0,
       totalBufferedDurationMs: map['totalBufferedDurationMs'] as int? ?? 0,
+      streamStationName: map['streamStationName'] as String?,
+      nowPlaying: map['nowPlaying'] as String?,
     );
   }
 
@@ -77,6 +89,8 @@ class RadioPlayerState {
     int? retryInSeconds,
     int? bufferedPositionMs,
     int? totalBufferedDurationMs,
+    String? streamStationName,
+    String? nowPlaying,
   }) {
     return RadioPlayerState(
       url: url ?? this.url,
@@ -88,6 +102,8 @@ class RadioPlayerState {
       bufferedPositionMs: bufferedPositionMs ?? this.bufferedPositionMs,
       totalBufferedDurationMs:
           totalBufferedDurationMs ?? this.totalBufferedDurationMs,
+      streamStationName: streamStationName ?? this.streamStationName,
+      nowPlaying: nowPlaying ?? this.nowPlaying,
     );
   }
 

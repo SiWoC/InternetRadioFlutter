@@ -9,18 +9,26 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Metadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.metadata.icy.IcyHeaders
+import androidx.media3.extractor.metadata.icy.IcyInfo
+import androidx.media3.extractor.metadata.id3.TextInformationFrame
+import androidx.media3.extractor.metadata.vorbis.VorbisComment
 import androidx.media3.session.MediaSession
 import io.flutter.plugin.common.EventChannel
 import kotlin.math.min
 
+@UnstableApi
 class RadioPlayerManager(context: Context) {
     private val appContext = context.applicationContext
     private var eventSink: EventChannel.EventSink? = null
@@ -29,6 +37,8 @@ class RadioPlayerManager(context: Context) {
     private var currentUrl: String? = null
     private var lastError: String? = null
     private var currentTitle: String? = null
+    private var streamStationName: String? = null
+    private var nowPlaying: String? = null
 
     private val handler = Handler(Looper.getMainLooper())
     private var retryAttempt = 0
@@ -47,6 +57,12 @@ class RadioPlayerManager(context: Context) {
                 // Live streams can idle between chunks; avoid periodic reconnects.
                 .setReadTimeoutMs(0)
                 .setAllowCrossProtocolRedirects(true)
+                .setDefaultRequestProperties(
+                    mapOf(
+                        IcyHeaders.REQUEST_HEADER_ENABLE_METADATA_NAME to
+                            IcyHeaders.REQUEST_HEADER_ENABLE_METADATA_VALUE,
+                    ),
+                )
 
         val dataSourceFactory =
             DefaultDataSource.Factory(appContext, httpDataSourceFactory)
@@ -118,6 +134,31 @@ class RadioPlayerManager(context: Context) {
                                     "old=${oldPosition.positionMs} new=${newPosition.positionMs}",
                             )
                         }
+
+                        override fun onTracksChanged(tracks: Tracks) {
+                            for (groupIndex in 0 until tracks.groups.size) {
+                                val group = tracks.groups[groupIndex]
+                                for (trackIndex in 0 until group.length) {
+                                    group.getTrackFormat(trackIndex).metadata?.let {
+                                        applyMetadata(it)
+                                    }
+                                }
+                            }
+                        }
+
+                        override fun onMetadata(metadata: Metadata) {
+                            applyMetadata(metadata)
+                        }
+
+                        override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                            val station =
+                                mediaMetadata.station?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+                            if (station != null && streamStationName != station) {
+                                streamStationName = station
+                                publishSessionMetadata()
+                                emitState()
+                            }
+                        }
                     },
                 )
             }
@@ -154,6 +195,8 @@ class RadioPlayerManager(context: Context) {
         releaseCurrentStream()
         lastError = null
         currentUrl = url
+        streamStationName = null
+        nowPlaying = null
 
         val displayTitle = title?.takeIf { it.isNotBlank() } ?: DEFAULT_TITLE
         currentTitle = displayTitle
@@ -177,6 +220,8 @@ class RadioPlayerManager(context: Context) {
         releaseCurrentStream()
         currentUrl = null
         currentTitle = null
+        streamStationName = null
+        nowPlaying = null
         lastError = null
         emitState()
         if (stopService) {
@@ -211,10 +256,15 @@ class RadioPlayerManager(context: Context) {
             put("retryInSeconds", retryInSeconds)
             put("bufferedPositionMs", player.bufferedPosition)
             put("totalBufferedDurationMs", player.totalBufferedDuration)
+            put("streamStationName", streamStationName)
+            put("nowPlaying", nowPlaying)
         }
     }
 
-    fun currentTitle(): String? = currentTitle
+    /** Stream station name when the stream sends it, else the play() / JSON name. */
+    fun sessionTitle(): String {
+        return streamStationName?.takeIf { it.isNotEmpty() } ?: currentTitle ?: DEFAULT_TITLE
+    }
 
     fun detach() {
         eventSink = null
@@ -233,7 +283,6 @@ class RadioPlayerManager(context: Context) {
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(displayTitle)
-                    .setArtist(DEFAULT_ARTIST)
                     .build(),
             )
             .setLiveConfiguration(
@@ -336,6 +385,115 @@ class RadioPlayerManager(context: Context) {
         retryAttempt = 0
     }
 
+    private fun applyMetadata(metadata: Metadata) {
+        var stationName: String? = null
+        var icyTitlePresent = false
+        var icyTitle: String? = null
+        var artist: String? = null
+        var title: String? = null
+
+        for (i in 0 until metadata.length()) {
+            when (val entry = metadata[i]) {
+                is IcyHeaders -> {
+                    stationName = entry.name?.trim()?.takeIf { it.isNotEmpty() }
+                }
+                is IcyInfo -> {
+                    icyTitlePresent = true
+                    icyTitle = entry.title?.trim()?.takeIf { it.isNotEmpty() }
+                }
+                is TextInformationFrame -> {
+                    val value = entry.values.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+                    when (entry.id) {
+                        "TPE1", "TP1" -> artist = value
+                        "TIT2", "TT2" -> title = value
+                    }
+                }
+                is VorbisComment -> {
+                    val value = entry.value.trim().takeIf { it.isNotEmpty() }
+                    when (entry.key.uppercase()) {
+                        "ARTIST" -> artist = value
+                        "TITLE" -> title = value
+                    }
+                }
+            }
+        }
+
+        var changed = false
+        if (stationName != null && streamStationName != stationName) {
+            streamStationName = stationName
+            changed = true
+        }
+        if (icyTitlePresent) {
+            if (nowPlaying != icyTitle) {
+                nowPlaying = icyTitle
+                changed = true
+            }
+        } else {
+            val formatted = formatNowPlaying(artist, title)
+            if (formatted != null && nowPlaying != formatted) {
+                nowPlaying = formatted
+                changed = true
+            }
+        }
+        if (changed) {
+            publishSessionMetadata()
+            emitState()
+        }
+    }
+
+    /** Now-playing line; omitted when it duplicates the station title. */
+    private fun sessionArtist(): String? {
+        val playing = nowPlaying?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (playing.equals(sessionTitle(), ignoreCase = true)) {
+            return null
+        }
+        return playing
+    }
+
+    private fun publishSessionMetadata() {
+        val index = player.currentMediaItemIndex
+        if (index == C.INDEX_UNSET) {
+            return
+        }
+        val item = player.getMediaItemAt(index)
+        val title = sessionTitle()
+        val artist = sessionArtist().orEmpty()
+        val existing = item.mediaMetadata
+        if (existing.title?.toString() == title &&
+            existing.artist?.toString().orEmpty() == artist
+        ) {
+            return
+        }
+        val metadata =
+            MediaMetadata.Builder()
+                .setTitle(title)
+                .setArtist(artist)
+                .build()
+        player.replaceMediaItem(
+            index,
+            item.buildUpon().setMediaMetadata(metadata).build(),
+        )
+        RadioPlaybackService.updateNotification(appContext)
+    }
+
+    private fun formatNowPlaying(artist: String?, title: String?): String? {
+        val a = artist?.trim().orEmpty()
+        val t = title?.trim().orEmpty()
+        if (a.isEmpty() && t.isEmpty()) {
+            return null
+        }
+        if (a.isEmpty()) {
+            return t
+        }
+        if (t.isEmpty()) {
+            return a
+        }
+        if (t.contains(a, ignoreCase = true)) {
+            return t
+        }
+        return "$a - $t"
+    }
+
     private fun playbackStateName(state: Int): String {
         return when (state) {
             Player.STATE_IDLE -> "Idle"
@@ -357,7 +515,6 @@ class RadioPlayerManager(context: Context) {
     companion object {
         private const val TAG = "RadioPlayerManager"
         private const val DEFAULT_TITLE = "Internet Radio"
-        private const val DEFAULT_ARTIST = "Internet Radio"
         private const val INITIAL_RETRY_DELAY_MS = 1_000L
         private const val MAX_RETRY_DELAY_MS = 32_000L
         /** 2^5 * 1s = 32s; further attempts stay capped. */

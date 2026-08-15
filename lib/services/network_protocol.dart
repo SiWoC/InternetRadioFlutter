@@ -31,11 +31,15 @@ abstract final class NetworkProtocol {
 
   static bool isOk(String? response) => response?.trim() == ok;
 
-  /// Wire format: `STATE|stationIndex|muted|playing` with muted/playing as `0`/`1`.
+  /// Wire format: `STATE|stationIndex|muted|playing|stationTitle|nowPlaying`
+  /// with muted/playing as `0`/`1`. Titles are percent-encoded so `|` is safe.
   static String encodeState(RemotePlayerState state) {
     final muted = state.isMuted ? '1' : '0';
     final playing = state.isPlaying ? '1' : '0';
-    return '$_statePrefix${state.stationIndex}|$muted|$playing';
+    final stationTitle = Uri.encodeComponent(state.stationTitle ?? '');
+    final nowPlaying = Uri.encodeComponent(state.nowPlaying ?? '');
+    return '$_statePrefix${state.stationIndex}|$muted|$playing|'
+        '$stationTitle|$nowPlaying';
   }
 
   static RemotePlayerState? parseState(String? line) {
@@ -43,7 +47,7 @@ abstract final class NetworkProtocol {
       return null;
     }
     final parts = line.trim().split('|');
-    if (parts.length != 4 || parts[0] != 'STATE') {
+    if (parts.length != 6 || parts[0] != 'STATE') {
       return null;
     }
     final index = int.tryParse(parts[1]);
@@ -56,6 +60,8 @@ abstract final class NetworkProtocol {
       stationIndex: index,
       isMuted: muted,
       isPlaying: playing,
+      stationTitle: _decodeStateField(parts[4]),
+      nowPlaying: _decodeStateField(parts[5]),
     );
   }
 
@@ -106,6 +112,19 @@ abstract final class NetworkProtocol {
       return true;
     }
     return null;
+  }
+
+  static String? _decodeStateField(String raw) {
+    if (raw.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = Uri.decodeComponent(raw).trim();
+      return decoded.isEmpty ? null : decoded;
+    } on FormatException {
+      final trimmed = raw.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
   }
 }
 

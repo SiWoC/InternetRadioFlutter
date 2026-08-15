@@ -70,6 +70,11 @@ class _FakePlayer implements RadioPlayer {
   void dispose() {
     _stateController.close();
   }
+
+  void emit(RadioPlayerState state) {
+    _state = state;
+    _stateController.add(_state);
+  }
 }
 
 class _FakeNetwork extends NetworkService {
@@ -228,7 +233,7 @@ void main() {
         lastStationName: 'ABC Triple J NSW',
       ),
     );
-    network.onCommand = (_) => 'STATE|1|0|1';
+    network.onCommand = (_) => 'STATE|1|0|1||';
 
     await controller.startForCurrentMode();
     await Future<void>.delayed(Duration.zero);
@@ -286,7 +291,7 @@ void main() {
     network.listenerStarted = true;
     network.onCommand = (command) {
       if (command == NetworkProtocol.getState) {
-        return 'STATE|0|0|1';
+        return 'STATE|0|0|1||';
       }
       return NetworkProtocol.ok;
     };
@@ -315,7 +320,7 @@ void main() {
         lastStationName: 'ABC Triple J NSW',
       ),
     );
-    network.onCommand = (_) => 'STATE|0|0|0';
+    network.onCommand = (_) => 'STATE|0|0|0||';
     await controller.startForCurrentMode();
 
     await controller.enterPlayerMode();
@@ -352,6 +357,7 @@ void main() {
         stationIndex: 1,
         isMuted: true,
         isPlaying: true,
+        stationTitle: 'ABC Triple J NSW',
       ),
     );
   });
@@ -509,5 +515,100 @@ void main() {
 
     expect(controller.settings.playerIp, '10.0.0.8');
     expect(controller.settings.testUrl, isNull);
+  });
+
+  test('chromeStationTitle uses config name then stream station name', () async {
+    await controller.selectStation(0);
+    expect(controller.chromeStationTitle, 'All Time Top 40 hits');
+    expect(controller.chromeNowPlaying, isNull);
+
+    player.emit(
+      RadioPlayerState(
+        url: 'https://a.example',
+        playbackState: PlaybackState.Ready,
+        isPlaying: true,
+        streamStationName: 'Icecast One',
+        nowPlaying: 'Queen - Bohemian Rhapsody',
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.chromeStationTitle, 'Icecast One');
+    expect(controller.chromeNowPlaying, 'Queen - Bohemian Rhapsody');
+  });
+
+  test('chromeNowPlaying is hidden when it matches the station title', () async {
+    await controller.selectStation(0);
+    player.emit(
+      RadioPlayerState(
+        url: 'https://a.example',
+        playbackState: PlaybackState.Ready,
+        isPlaying: true,
+        nowPlaying: 'All Time Top 40 hits',
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.chromeNowPlaying, isNull);
+  });
+
+  test('Remote chrome uses config name and no now-playing', () async {
+    await controller.savePlayerIp('192.168.1.10');
+    await controller.enterRemoteMode();
+
+    expect(controller.chromeStationTitle, 'Waiting for player');
+    expect(controller.chromeNowPlaying, isNull);
+  });
+
+  test('GET_STATE includes chrome station title and now-playing', () async {
+    await controller.selectStation(0);
+    await controller.startPlayerListener();
+    player.emit(
+      RadioPlayerState(
+        url: 'https://a.example',
+        playbackState: PlaybackState.Ready,
+        isPlaying: true,
+        streamStationName: 'Icecast One',
+        nowPlaying: 'Queen - Bohemian Rhapsody',
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final reply = await network.handler!(const GetStateCommand());
+    expect(
+      reply,
+      NetworkProtocol.encodeState(
+        const RemotePlayerState(
+          stationIndex: 0,
+          isPlaying: true,
+          stationTitle: 'Icecast One',
+          nowPlaying: 'Queen - Bohemian Rhapsody',
+        ),
+      ),
+    );
+  });
+
+  test('Remote chrome uses polled station title and now-playing', () async {
+    await settings.save(
+      const AppSettings(
+        mode: OperatingMode.remote,
+        playerIp: '192.168.1.10',
+      ),
+    );
+    network.onCommand = (_) => NetworkProtocol.encodeState(
+          const RemotePlayerState(
+            stationIndex: 1,
+            isPlaying: true,
+            stationTitle: 'Icecast One',
+            nowPlaying: 'Queen - Bohemian Rhapsody',
+          ),
+        );
+
+    await controller.startForCurrentMode();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.chromeStationTitle, 'Icecast One');
+    expect(controller.chromeNowPlaying, 'Queen - Bohemian Rhapsody');
+    expect(controller.selectedStationIndex, 1);
   });
 }

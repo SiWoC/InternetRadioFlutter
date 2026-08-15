@@ -176,7 +176,7 @@ class RadioPlaybackService : MediaSessionService() {
                 PendingIntent.FLAG_UPDATE_CURRENT or pendingIntentImmutableFlag(),
             )
 
-        val title = playerManager.currentTitle() ?: getString(R.string.radio_default_title)
+        val title = playerManager.sessionTitle()
         val muteLabel =
             if (playerManager.isMuted()) {
                 getString(R.string.radio_action_unmute)
@@ -226,6 +226,8 @@ class RadioPlaybackService : MediaSessionService() {
 
         const val ACTION_MUTE_TOGGLE = "nl.siwoc.internetradio.action.MUTE_TOGGLE"
         const val ACTION_STOP_PLAYBACK = "nl.siwoc.internetradio.action.STOP_PLAYBACK"
+        const val ACTION_UPDATE_NOTIFICATION =
+            "nl.siwoc.internetradio.action.UPDATE_NOTIFICATION"
 
         fun start(context: Context) {
             val intent = Intent(context, RadioPlaybackService::class.java)
@@ -234,6 +236,13 @@ class RadioPlaybackService : MediaSessionService() {
 
         fun stop(context: Context) {
             context.stopService(Intent(context, RadioPlaybackService::class.java))
+        }
+
+        fun updateNotification(context: Context) {
+            context.startService(
+                Intent(context, RadioPlaybackService::class.java)
+                    .setAction(ACTION_UPDATE_NOTIFICATION),
+            )
         }
 
         fun mediaButtons(isMuted: Boolean): ImmutableList<CommandButton> {

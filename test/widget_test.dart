@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,6 +46,56 @@ class _SilentPlayer implements RadioPlayer {
   void dispose() {}
 }
 
+class _StreamingPlayer implements RadioPlayer {
+  final _stateController = StreamController<RadioPlayerState>.broadcast();
+  RadioPlayerState _state = const RadioPlayerState();
+
+  @override
+  RadioPlayerState get state => _state;
+
+  @override
+  Stream<RadioPlayerState> get stateStream => _stateController.stream;
+
+  @override
+  Future<bool> play(String url, {String? title, bool applyAudioRouteFix = true}) async {
+    _state = RadioPlayerState(
+      url: url,
+      playbackState: PlaybackState.Ready,
+      isPlaying: true,
+    );
+    _stateController.add(_state);
+    return true;
+  }
+
+  @override
+  Future<void> stop() async {
+    _state = const RadioPlayerState();
+    _stateController.add(_state);
+  }
+
+  @override
+  Future<void> setMuted(bool muted) async {}
+
+  @override
+  Future<void> toggleMute() async {}
+
+  @override
+  Future<void> refreshState() async {}
+
+  @override
+  Future<void> wakeDisplay() async {}
+
+  @override
+  void dispose() {
+    _stateController.close();
+  }
+
+  void emit(RadioPlayerState state) {
+    _state = state;
+    _stateController.add(_state);
+  }
+}
+
 class _SilentWakelock implements ScreenWakelock {
   @override
   Future<void> setEnabled(bool enabled) async {}
@@ -86,7 +138,10 @@ class _FakePingNetwork extends NetworkService {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  Future<RadioController> buildController({NetworkService? network}) async {
+  Future<RadioController> buildController({
+    NetworkService? network,
+    RadioPlayer? player,
+  }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await SettingsRepository.load();
     return RadioController(
@@ -107,7 +162,7 @@ void main() {
         ),
       ]),
       settings: settings,
-      player: _SilentPlayer(),
+      player: player ?? _SilentPlayer(),
       wakelock: _SilentWakelock(),
       network: network,
     );
@@ -124,6 +179,34 @@ void main() {
     expect(find.byTooltip('Exit'), findsOneWidget);
     expect(find.byTooltip('Remote mode'), findsOneWidget);
     expect(find.byTooltip('Settings'), findsOneWidget);
+  });
+
+  testWidgets('top chrome shows stream station name and now-playing',
+      (tester) async {
+    final player = _StreamingPlayer();
+    final controller = await buildController(player: player);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(InternetRadioApp(controller: controller));
+    await tester.pump();
+    await controller.selectStation(0);
+    await tester.pump();
+
+    expect(find.text('All Time Top 40 hits'), findsWidgets);
+
+    player.emit(
+      RadioPlayerState(
+        url: 'https://a.example',
+        playbackState: PlaybackState.Ready,
+        isPlaying: true,
+        streamStationName: 'Icecast Live',
+        nowPlaying: 'Artist - Song Title',
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Icecast Live'), findsOneWidget);
+    expect(find.text('Artist - Song Title'), findsOneWidget);
   });
 
   testWidgets('failed remote ping shows close until a later tap connects',

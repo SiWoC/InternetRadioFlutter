@@ -48,6 +48,7 @@ val media3Version = "1.10.1"
 
 dependencies {
     implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-extractor:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
 }

@@ -54,9 +54,21 @@ void main() {
       isPlaying: false,
     );
     final line = NetworkProtocol.encodeState(state);
-    expect(line, 'STATE|2|1|0');
+    expect(line, 'STATE|2|1|0||');
     expect(NetworkProtocol.parseState(line), state);
-    expect(NetworkProtocol.parseState('STATE|x|1|0'), isNull);
+    expect(NetworkProtocol.parseState('STATE|x|1|0||'), isNull);
+  });
+
+  test('NetworkProtocol STATE encodes titles with pipes', () {
+    const state = RemotePlayerState(
+      stationIndex: 0,
+      isPlaying: true,
+      stationTitle: 'Radio | One',
+      nowPlaying: 'Artist | Title',
+    );
+    final line = NetworkProtocol.encodeState(state);
+    expect(line, 'STATE|0|0|1|Radio%20%7C%20One|Artist%20%7C%20Title');
+    expect(NetworkProtocol.parseState(line), state);
   });
 
   test('sendCommand returns null for empty host or command', () async {
@@ -135,6 +147,6 @@ void main() {
       NetworkProtocol.getState,
       port: port,
     );
-    expect(state, 'STATE|1|0|1');
+    expect(state, 'STATE|1|0|1||');
   });
 }
