@@ -24,6 +24,7 @@ void main() {
       lastStationName: 'Q-Music',
       testUrl: 'https://example.com/stream',
       displayPolicy: DisplayPolicy.allowScreenOff,
+      yamahaIp: '192.168.2.2',
     );
 
     await repo.save(updated);

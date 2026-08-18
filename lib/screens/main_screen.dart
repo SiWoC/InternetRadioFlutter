@@ -10,6 +10,7 @@ import 'package:internetradio/widgets/marquee_text.dart';
 import 'package:internetradio/widgets/screensaver_overlay.dart';
 import 'package:internetradio/widgets/settings_overlay.dart';
 import 'package:internetradio/widgets/station_grid.dart';
+import 'package:internetradio/widgets/yamaha_overlay.dart';
 
 /// Main radio UI — chrome + station grid.
 class MainScreen extends StatefulWidget {
@@ -84,6 +85,7 @@ class _MainScreenState extends State<MainScreen> {
                       playerUnreachable: controller.playerUnreachable,
                       onToggleMode: () =>
                           unawaited(controller.toggleOperatingMode()),
+                      onYamaha: controller.openYamaha,
                       onSettings: controller.openSettings,
                     ),
                   ],
@@ -93,19 +95,45 @@ class _MainScreenState extends State<MainScreen> {
                     child: SettingsOverlay(
                       initialPlayerIp: controller.settings.playerIp,
                       initialTestUrl: controller.settings.testUrl ?? '',
+                      initialYamahaIp: controller.settings.yamahaIp,
                       displayPolicy: controller.settings.displayPolicy,
                       bannerMessage: controller.settingsMessage,
-                      onTestConnection: controller.testPlayerConnection,
-                      onPersistIp: controller.savePlayerIp,
+                      onTestPlayerConnection: controller.testPlayerConnection,
+                      onPersistPlayerIp: controller.savePlayerIp,
+                      onFindPlayer: controller.findPlayerIp,
+                      onTestYamahaConnection: controller.testYamahaConnection,
+                      onPersistYamahaIp: controller.saveYamahaIp,
+                      onFindYamaha: controller.findYamahaIp,
                       onPlayTestUrl: controller.playTestUrl,
                       onDisplayPolicyChanged: controller.setDisplayPolicy,
-                      onSaveAndClose: (ip, testUrl) async {
-                        await controller.saveSettings(
-                          playerIp: ip,
-                          testUrl: testUrl,
-                        );
-                        controller.closeSettings();
-                      },
+                      onSaveAndClose:
+                          ({
+                            required playerIp,
+                            required testUrl,
+                            required yamahaIp,
+                          }) async {
+                            await controller.saveSettings(
+                              playerIp: playerIp,
+                              testUrl: testUrl,
+                              yamahaIp: yamahaIp,
+                            );
+                            controller.closeSettings();
+                          },
+                    ),
+                  ),
+                if (controller.isYamahaOpen)
+                  Positioned.fill(
+                    child: YamahaOverlay(
+                      status: controller.yamahaStatus,
+                      inputs: controller.yamahaInputs,
+                      busy: controller.yamahaBusy,
+                      onPower: () => unawaited(controller.toggleYamahaPower()),
+                      onSelectInput: (inputSel) =>
+                          unawaited(controller.selectYamahaInput(inputSel)),
+                      onVolumeUp: () => unawaited(controller.yamahaVolumeUp()),
+                      onVolumeDown: () =>
+                          unawaited(controller.yamahaVolumeDown()),
+                      onClose: controller.closeYamaha,
                     ),
                   ),
                 if (screensaver.isVisible)
@@ -125,27 +153,35 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _exitApp(RadioController controller) async {
     if (controller.isRemoteMode) {
-      final exitPlayer = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Exit the player too?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('No'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Yes'),
-            ),
-          ],
-        ),
+      final reachable = await controller.testPlayerConnection(
+        controller.settings.playerIp,
       );
-      if (!context.mounted || exitPlayer == null) {
+      if (!mounted) {
         return;
       }
-      if (exitPlayer) {
-        await controller.exitRemotePlayer();
+      if (reachable) {
+        final exitPlayer = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Exit the player too?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('No'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Yes'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted || exitPlayer == null) {
+          return;
+        }
+        if (exitPlayer) {
+          await controller.exitRemotePlayer();
+        }
       }
     } else {
       await controller.stop();
@@ -164,9 +200,9 @@ class _MainScreenState extends State<MainScreen> {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Play failed: ${error.message}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Play failed: ${error.message}')));
     }
   }
 }
@@ -193,8 +229,7 @@ class _TopChrome extends StatelessWidget {
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final nowPlayingLine = nowPlaying;
-    final hasNowPlaying =
-        nowPlayingLine != null && nowPlayingLine.isNotEmpty;
+    final hasNowPlaying = nowPlayingLine != null && nowPlayingLine.isNotEmpty;
     final stationStyle = TextStyle(
       color: Colors.white,
       fontSize: isLandscape
@@ -262,6 +297,7 @@ class _BottomChrome extends StatelessWidget {
     required this.mode,
     required this.playerUnreachable,
     required this.onToggleMode,
+    required this.onYamaha,
     required this.onSettings,
   });
 
@@ -269,6 +305,7 @@ class _BottomChrome extends StatelessWidget {
   final OperatingMode mode;
   final bool playerUnreachable;
   final VoidCallback onToggleMode;
+  final VoidCallback onYamaha;
   final VoidCallback onSettings;
 
   @override
@@ -288,12 +325,11 @@ class _BottomChrome extends StatelessWidget {
               Expanded(
                 child: Text(
                   localIp,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
                 ),
               ),
+              _YamahaChromeButton(onPressed: onYamaha),
+              const SizedBox(width: 8),
               _ModeToggleButton(
                 isRemote: isRemote,
                 showUnreachableOverlay: !isRemote && playerUnreachable,
@@ -356,6 +392,30 @@ class _ModeToggleButton extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _YamahaChromeButton extends StatelessWidget {
+  const _YamahaChromeButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 48.0;
+    final iconSize = size * 0.7;
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: 'Yamaha',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: size, height: size),
+      icon: Image.asset(
+        'assets/images/yamaha-white-370x370.png',
+        width: iconSize,
+        height: iconSize,
+        fit: BoxFit.contain,
       ),
     );
   }

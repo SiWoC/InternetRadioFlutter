@@ -10,6 +10,7 @@ class SettingsRepository {
   static const _keyLastStationName = 'settings.lastStationName';
   static const _keyTestUrl = 'settings.testUrl';
   static const _keyDisplayPolicy = 'settings.displayPolicy';
+  static const _keyYamahaIp = 'settings.yamahaIp';
 
   final SharedPreferences _prefs;
   AppSettings _settings;
@@ -28,6 +29,7 @@ class SettingsRepository {
     await _prefs.setString(_keyMode, settings.mode.name);
     await _prefs.setString(_keyPlayerIp, settings.playerIp);
     await _prefs.setString(_keyDisplayPolicy, settings.displayPolicy.name);
+    await _prefs.setString(_keyYamahaIp, settings.yamahaIp);
 
     if (settings.lastStationName == null) {
       await _prefs.remove(_keyLastStationName);
@@ -50,6 +52,7 @@ class SettingsRepository {
       lastStationName: _emptyToNull(prefs.getString(_keyLastStationName)),
       testUrl: _emptyToNull(prefs.getString(_keyTestUrl)),
       displayPolicy: _parseDisplayPolicy(prefs.getString(_keyDisplayPolicy)),
+      yamahaIp: prefs.getString(_keyYamahaIp) ?? '',
     );
   }
 

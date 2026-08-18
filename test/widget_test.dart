@@ -25,7 +25,11 @@ class _SilentPlayer implements RadioPlayer {
   Stream<RadioPlayerState> get stateStream => const Stream.empty();
 
   @override
-  Future<bool> play(String url, {String? title, bool applyAudioRouteFix = true}) async => true;
+  Future<bool> play(
+    String url, {
+    String? title,
+    bool applyAudioRouteFix = true,
+  }) async => true;
 
   @override
   Future<void> stop() async {}
@@ -57,7 +61,11 @@ class _StreamingPlayer implements RadioPlayer {
   Stream<RadioPlayerState> get stateStream => _stateController.stream;
 
   @override
-  Future<bool> play(String url, {String? title, bool applyAudioRouteFix = true}) async {
+  Future<bool> play(
+    String url, {
+    String? title,
+    bool applyAudioRouteFix = true,
+  }) async {
     _state = RadioPlayerState(
       url: url,
       playbackState: PlaybackState.Ready,
@@ -156,10 +164,7 @@ void main() {
           url: 'https://triplej.example',
           imageAssetPath: 'assets/images/triple-j.png',
         ),
-        RadioStation(
-          name: 'URL test',
-          url: 'https://test.example',
-        ),
+        RadioStation(name: 'URL test', url: 'https://test.example'),
       ]),
       settings: settings,
       player: player ?? _SilentPlayer(),
@@ -179,10 +184,12 @@ void main() {
     expect(find.byTooltip('Exit'), findsOneWidget);
     expect(find.byTooltip('Remote mode'), findsOneWidget);
     expect(find.byTooltip('Settings'), findsOneWidget);
+    expect(find.byTooltip('Yamaha'), findsOneWidget);
   });
 
-  testWidgets('top chrome shows stream station name and now-playing',
-      (tester) async {
+  testWidgets('top chrome shows stream station name and now-playing', (
+    tester,
+  ) async {
     final player = _StreamingPlayer();
     final controller = await buildController(player: player);
     addTearDown(controller.dispose);
@@ -209,8 +216,9 @@ void main() {
     expect(find.text('Artist - Song Title'), findsOneWidget);
   });
 
-  testWidgets('failed remote ping shows close until a later tap connects',
-      (tester) async {
+  testWidgets('failed remote ping shows close until a later tap connects', (
+    tester,
+  ) async {
     final network = _FakePingNetwork()..pingResult = false;
     final controller = await buildController(network: network);
     await controller.savePlayerIp('192.168.1.10');
@@ -279,6 +287,39 @@ void main() {
     expect(pops, ['SystemNavigator.pop']);
   });
 
+  testWidgets('Remote Exit skips dialog when player ping fails', (tester) async {
+    final pops = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemNavigator.pop') {
+          pops.add(call.method);
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
+
+    final network = _FakePingNetwork()..pingResult = false;
+    final controller = await buildController(network: network);
+    await controller.savePlayerIp('192.168.1.10');
+    await controller.enterRemoteMode();
+
+    await tester.pumpWidget(InternetRadioApp(controller: controller));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Exit'));
+    await tester.pumpAndSettle();
+    expect(find.text('Exit the player too?'), findsNothing);
+    expect(network.sent, isNot(contains(NetworkProtocol.exit)));
+    expect(pops, ['SystemNavigator.pop']);
+  });
+
   testWidgets('StationGrid uses vertical scroll in portrait', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
@@ -309,7 +350,9 @@ void main() {
     expect(delegate.crossAxisCount, 3);
   });
 
-  testWidgets('StationGrid uses horizontal scroll in landscape', (tester) async {
+  testWidgets('StationGrid uses horizontal scroll in landscape', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(800, 400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);

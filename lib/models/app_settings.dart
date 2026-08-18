@@ -21,6 +21,7 @@ class AppSettings {
     this.lastStationName,
     this.testUrl,
     this.displayPolicy = DisplayPolicy.keepScreenOn,
+    this.yamahaIp = '',
   });
 
   final OperatingMode mode;
@@ -32,12 +33,16 @@ class AppSettings {
   final String? testUrl;
   final DisplayPolicy displayPolicy;
 
+  /// Yamaha RX-V receiver address for Network Control HTTP.
+  final String yamahaIp;
+
   AppSettings copyWith({
     OperatingMode? mode,
     String? playerIp,
     String? lastStationName,
     String? testUrl,
     DisplayPolicy? displayPolicy,
+    String? yamahaIp,
   }) {
     return AppSettings(
       mode: mode ?? this.mode,
@@ -45,6 +50,7 @@ class AppSettings {
       lastStationName: lastStationName ?? this.lastStationName,
       testUrl: testUrl ?? this.testUrl,
       displayPolicy: displayPolicy ?? this.displayPolicy,
+      yamahaIp: yamahaIp ?? this.yamahaIp,
     );
   }
 
@@ -55,7 +61,8 @@ class AppSettings {
         other.playerIp == playerIp &&
         other.lastStationName == lastStationName &&
         other.testUrl == testUrl &&
-        other.displayPolicy == displayPolicy;
+        other.displayPolicy == displayPolicy &&
+        other.yamahaIp == yamahaIp;
   }
 
   @override
@@ -65,5 +72,6 @@ class AppSettings {
         lastStationName,
         testUrl,
         displayPolicy,
+        yamahaIp,
       );
 }

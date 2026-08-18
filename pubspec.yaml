@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.5.5
   wakelock_plus: ^1.7.0
+  xml: ^6.5.0
 
 dev_dependencies:
   flutter_test:

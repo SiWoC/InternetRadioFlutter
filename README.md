@@ -130,3 +130,5 @@ GNU General Public License v3.0 — see [LICENSE](LICENSE).
   - **OnePlus Nord 2T** — 1080 × 2400 (6.43″, 20:9), Android 14
 - Development checklist: [todo.md](todo.md)
 - Class & folder overview: [docs/class-overview.md](docs/class-overview.md)
+- Also has some Controls for my Yamaha Receiver with help of https://github.com/christianfl/av-receiver-docs
+

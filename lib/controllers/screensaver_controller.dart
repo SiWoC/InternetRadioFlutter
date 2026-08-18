@@ -7,7 +7,8 @@ import 'package:internetradio/models/app_settings.dart';
 /// 60s inactivity timer and screensaver visibility for Player + keep-screen-on.
 ///
 /// Resets on local touch ([onUserActivity]) and on mutating remote commands
-/// ([onRemoteCommand]). Stays off while settings are open or display may sleep.
+/// ([onRemoteCommand]). Stays off while Settings or Yamaha overlay is visible,
+/// or display may sleep.
 class ScreensaverController extends ChangeNotifier {
   ScreensaverController({
     required RadioController radioController,
@@ -29,11 +30,12 @@ class ScreensaverController extends ChangeNotifier {
   /// True while the full-screen bouncing logo should be shown.
   bool get isVisible => _visible;
 
-  /// Player mode, keep screen on, and settings closed.
+  /// Player mode, keep screen on, and Settings/Yamaha overlays closed.
   bool get isEligible =>
       _radioController.isPlayerMode &&
       _radioController.settings.displayPolicy == DisplayPolicy.keepScreenOn &&
-      !_radioController.isSettingsOpen;
+      !_radioController.isSettingsOpen &&
+      !_radioController.isYamahaOpen;
 
   /// Local touch: dismiss if showing, then restart the idle timer when eligible.
   void onUserActivity() {

@@ -6,12 +6,14 @@ import 'package:internetradio/controllers/radio_controller.dart';
 import 'package:internetradio/models/app_settings.dart';
 import 'package:internetradio/models/radio_player_state.dart';
 import 'package:internetradio/models/radio_station.dart';
+import 'package:internetradio/models/yamaha_status.dart';
 import 'package:internetradio/services/network_protocol.dart';
 import 'package:internetradio/services/network_service.dart';
 import 'package:internetradio/services/radio_player_service.dart';
 import 'package:internetradio/services/settings_repository.dart';
 import 'package:internetradio/services/station_repository.dart';
 import 'package:internetradio/services/wakelock_service.dart';
+import 'package:internetradio/services/yamaha_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakePlayer implements RadioPlayer {
@@ -107,6 +109,21 @@ class _FakeWakelock implements ScreenWakelock {
   Future<void> setEnabled(bool value) async {}
 }
 
+class _FakeYamaha extends YamahaService {
+  @override
+  Future<YamahaStatus?> getBasicStatus(String ip) async {
+    return const YamahaStatus(
+      power: YamahaPower.standby,
+      inputSel: 'HDMI4',
+      volumeTenthsDb: -570,
+      mute: false,
+    );
+  }
+
+  @override
+  Future<List<YamahaInput>?> getInputList(String ip) async => const [];
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -133,15 +150,13 @@ void main() {
       settings: settings,
       player: _FakePlayer(),
       network: network,
+      yamaha: _FakeYamaha(),
       wakelock: _FakeWakelock(),
       screensaverIdleTimeout: idleTimeout,
     );
   }
 
-  RadioController pumpController(
-    FakeAsync async, {
-    AppSettings? initial,
-  }) {
+  RadioController pumpController(FakeAsync async, {AppSettings? initial}) {
     RadioController? controller;
     buildController(initial: initial).then((c) => controller = c);
     async.flushMicrotasks();
@@ -199,13 +214,34 @@ void main() {
     });
   });
 
+  test('Yamaha overlay open suppresses screensaver', () {
+    fakeAsync((async) {
+      final controller = pumpController(
+        async,
+        initial: const AppSettings(yamahaIp: '192.168.2.2'),
+      );
+      addTearDown(controller.dispose);
+
+      async.elapse(idle);
+      expect(controller.screensaver.isVisible, isTrue);
+
+      controller.openYamaha();
+      expect(controller.screensaver.isVisible, isFalse);
+
+      async.elapse(idle);
+      expect(controller.screensaver.isVisible, isFalse);
+
+      controller.closeYamaha();
+      async.elapse(idle);
+      expect(controller.screensaver.isVisible, isTrue);
+    });
+  });
+
   test('allowScreenOff never shows screensaver', () {
     fakeAsync((async) {
       final controller = pumpController(
         async,
-        initial: const AppSettings(
-          displayPolicy: DisplayPolicy.allowScreenOff,
-        ),
+        initial: const AppSettings(displayPolicy: DisplayPolicy.allowScreenOff),
       );
       addTearDown(controller.dispose);
 

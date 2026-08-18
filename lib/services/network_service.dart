@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:internetradio/services/lan_scan.dart';
 import 'package:internetradio/services/network_protocol.dart';
 
 /// Handles one parsed Player-mode command and returns the reply line body.
@@ -100,11 +101,7 @@ class NetworkService {
 
     Socket? socket;
     try {
-      socket = await Socket.connect(
-        host,
-        port,
-        timeout: timeout,
-      );
+      socket = await Socket.connect(host, port, timeout: timeout);
 
       socket.write('$command\n');
       await socket.flush();
@@ -134,5 +131,19 @@ class NetworkService {
       port: port,
     );
     return NetworkProtocol.isPong(response);
+  }
+
+  /// /24 TCP `PING` sweep: after [afterIp] on this LAN, else from `.1`.
+  Future<String?> findPlayer({
+    required String localIpv4,
+    required String afterIp,
+    Duration timeout = Ipv4Sweep.probeTimeout,
+    int concurrency = Ipv4Sweep.concurrency,
+  }) {
+    return LanScan.firstSuccessInOrder(
+      hosts: Ipv4Sweep.hosts(localIpv4: localIpv4, afterIp: afterIp),
+      probe: (ip) => ping(ip, timeout: timeout),
+      concurrency: concurrency,
+    );
   }
 }

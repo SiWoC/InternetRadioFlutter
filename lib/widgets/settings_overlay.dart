@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:internetradio/models/app_settings.dart';
 
-/// Full-screen settings layer: player IP, URL test, display policy, save/close.
+/// Full-screen settings layer: player IP, Yamaha IP, URL test,
+/// display policy, save/close.
 ///
 /// Absorbs all pointer events so chrome and station grid underneath do not
 /// receive taps. Callers track open state for screensaver suppression.
@@ -10,9 +11,14 @@ class SettingsOverlay extends StatefulWidget {
     super.key,
     required this.initialPlayerIp,
     required this.initialTestUrl,
+    required this.initialYamahaIp,
     required this.displayPolicy,
-    required this.onTestConnection,
-    required this.onPersistIp,
+    required this.onTestPlayerConnection,
+    required this.onPersistPlayerIp,
+    required this.onFindPlayer,
+    required this.onTestYamahaConnection,
+    required this.onPersistYamahaIp,
+    required this.onFindYamaha,
     required this.onPlayTestUrl,
     required this.onDisplayPolicyChanged,
     required this.onSaveAndClose,
@@ -21,6 +27,7 @@ class SettingsOverlay extends StatefulWidget {
 
   final String initialPlayerIp;
   final String initialTestUrl;
+  final String initialYamahaIp;
 
   /// Applied as a wakelock only while this device is in Player mode.
   final DisplayPolicy displayPolicy;
@@ -29,10 +36,22 @@ class SettingsOverlay extends StatefulWidget {
   final String? bannerMessage;
 
   /// Returns whether `PING`/`PONG` succeeded for [ip].
-  final Future<bool> Function(String ip) onTestConnection;
+  final Future<bool> Function(String ip) onTestPlayerConnection;
 
-  /// Persists [ip] after a successful connection test (Unity parity).
-  final Future<void> Function(String ip) onPersistIp;
+  /// Persists [ip] after a successful player connection test.
+  final Future<void> Function(String ip) onPersistPlayerIp;
+
+  /// /24 player sweep: after [currentIp] when it is on this LAN, else from `.1`.
+  final Future<String?> Function(String currentIp) onFindPlayer;
+
+  /// Returns whether GET `Basic_Status` succeeded for [ip].
+  final Future<bool> Function(String ip) onTestYamahaConnection;
+
+  /// Persists [ip] after a successful Yamaha connection test.
+  final Future<void> Function(String ip) onPersistYamahaIp;
+
+  /// SSDP find for a Yamaha receiver, next after [currentIp].
+  final Future<String?> Function(String currentIp) onFindYamaha;
 
   /// Plays [testUrl] on the URL-test slot (Player) or sends `TESTURL` (Remote).
   final Future<void> Function(String testUrl) onPlayTestUrl;
@@ -40,8 +59,13 @@ class SettingsOverlay extends StatefulWidget {
   /// Persists and applies [policy] immediately.
   final Future<void> Function(DisplayPolicy policy) onDisplayPolicyChanged;
 
-  /// Persists [ip] and [testUrl] (either may be empty) and dismisses the overlay.
-  final Future<void> Function(String ip, String testUrl) onSaveAndClose;
+  /// Persists fields (empty allowed) and dismisses the overlay.
+  final Future<void> Function({
+    required String playerIp,
+    required String testUrl,
+    required String yamahaIp,
+  })
+  onSaveAndClose;
 
   @override
   State<SettingsOverlay> createState() => _SettingsOverlayState();
@@ -53,20 +77,32 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
 
   late final TextEditingController _ipController;
   late final TextEditingController _urlController;
+  late final TextEditingController _yamahaIpController;
   late DisplayPolicy _displayPolicy;
   String _testResult = '';
+  String _yamahaTestResult = '';
   String _urlResult = '';
   bool _testing = false;
+  bool _yamahaTesting = false;
+  bool _findingPlayer = false;
+  bool _findingYamaha = false;
   bool _playingUrl = false;
   bool _saving = false;
 
-  bool get _busy => _testing || _playingUrl || _saving;
+  bool get _busy =>
+      _testing ||
+      _yamahaTesting ||
+      _findingPlayer ||
+      _findingYamaha ||
+      _playingUrl ||
+      _saving;
 
   @override
   void initState() {
     super.initState();
     _ipController = TextEditingController(text: widget.initialPlayerIp);
     _urlController = TextEditingController(text: widget.initialTestUrl);
+    _yamahaIpController = TextEditingController(text: widget.initialYamahaIp);
     _displayPolicy = widget.displayPolicy;
   }
 
@@ -74,36 +110,116 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
   void dispose() {
     _ipController.dispose();
     _urlController.dispose();
+    _yamahaIpController.dispose();
     super.dispose();
   }
 
   Future<void> _onTest() async {
-    final ip = _ipController.text.trim();
+    await _runIpTest(
+      ip: _ipController.text.trim(),
+      setTesting: (value) => _testing = value,
+      setResult: (value) => _testResult = value,
+      onTest: widget.onTestPlayerConnection,
+      onPersist: widget.onPersistPlayerIp,
+    );
+  }
+
+  Future<void> _onTestYamaha() async {
+    await _runIpTest(
+      ip: _yamahaIpController.text.trim(),
+      setTesting: (value) => _yamahaTesting = value,
+      setResult: (value) => _yamahaTestResult = value,
+      onTest: widget.onTestYamahaConnection,
+      onPersist: widget.onPersistYamahaIp,
+    );
+  }
+
+  Future<void> _onFindPlayer() {
+    return _runFind(
+      currentIp: _ipController.text.trim(),
+      field: _ipController,
+      setFinding: (value) => _findingPlayer = value,
+      setResult: (value) => _testResult = value,
+      onFind: widget.onFindPlayer,
+      onPersist: widget.onPersistPlayerIp,
+    );
+  }
+
+  Future<void> _onFindYamaha() {
+    return _runFind(
+      currentIp: _yamahaIpController.text.trim(),
+      field: _yamahaIpController,
+      setFinding: (value) => _findingYamaha = value,
+      setResult: (value) => _yamahaTestResult = value,
+      onFind: widget.onFindYamaha,
+      onPersist: widget.onPersistYamahaIp,
+    );
+  }
+
+  Future<void> _runIpTest({
+    required String ip,
+    required void Function(bool value) setTesting,
+    required void Function(String value) setResult,
+    required Future<bool> Function(String ip) onTest,
+    required Future<void> Function(String ip) onPersist,
+  }) async {
     if (ip.isEmpty) {
-      setState(() => _testResult = 'Error: No IP');
+      setState(() => setResult('Error: No IP'));
       return;
     }
 
     setState(() {
-      _testing = true;
-      _testResult = 'Testing...';
+      setTesting(true);
+      setResult('Testing...');
     });
 
-    final ok = await widget.onTestConnection(ip);
+    final ok = await onTest(ip);
     if (!mounted) {
       return;
     }
 
     if (ok) {
-      await widget.onPersistIp(ip);
+      await onPersist(ip);
     }
     if (!mounted) {
       return;
     }
 
     setState(() {
-      _testing = false;
-      _testResult = ok ? 'OK' : 'Error';
+      setTesting(false);
+      setResult(ok ? 'OK' : 'Error');
+    });
+  }
+
+  Future<void> _runFind({
+    required String currentIp,
+    required TextEditingController field,
+    required void Function(bool value) setFinding,
+    required void Function(String value) setResult,
+    required Future<String?> Function(String currentIp) onFind,
+    required Future<void> Function(String ip) onPersist,
+  }) async {
+    setState(() {
+      setFinding(true);
+      setResult('Searching...');
+    });
+
+    final ip = await onFind(currentIp);
+    if (!mounted) {
+      return;
+    }
+
+    if (ip != null) {
+      field.text = ip;
+      await onPersist(ip);
+    }
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      setFinding(false);
+      setResult(ip != null ? 'OK' : 'Error: Not found');
     });
   }
 
@@ -128,8 +244,9 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
   }
 
   Future<void> _onDisplayPolicyChanged(bool keepOn) async {
-    final policy =
-        keepOn ? DisplayPolicy.keepScreenOn : DisplayPolicy.allowScreenOff;
+    final policy = keepOn
+        ? DisplayPolicy.keepScreenOn
+        : DisplayPolicy.allowScreenOff;
     setState(() => _displayPolicy = policy);
     await widget.onDisplayPolicyChanged(policy);
   }
@@ -141,8 +258,9 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
     setState(() => _saving = true);
     try {
       await widget.onSaveAndClose(
-        _ipController.text.trim(),
-        _urlController.text.trim(),
+        playerIp: _ipController.text.trim(),
+        testUrl: _urlController.text.trim(),
+        yamahaIp: _yamahaIpController.text.trim(),
       );
     } finally {
       if (mounted) {
@@ -181,7 +299,7 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -198,39 +316,24 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
                         ),
                       ],
                       SizedBox(height: gap),
-                      const Text(
-                        'Player IP address',
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                      const SizedBox(height: 6),
-                      TextField(
+                      _ipTestRow(
+                        label: 'Player IP address',
+                        hint: 'e.g. 192.168.1.10',
                         controller: _ipController,
-                        enabled: !_busy,
-                        keyboardType: TextInputType.text,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: _fieldDecoration('e.g. 192.168.1.10'),
+                        findTooltip: 'Find player',
+                        onFind: _onFindPlayer,
+                        onTest: _onTest,
+                        result: _testResult,
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          FilledButton(
-                            onPressed: _busy ? null : _onTest,
-                            style: _compactButton,
-                            child: const Text('Test Connection'),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _testResult,
-                              style: TextStyle(
-                                color: _statusColor(_testResult),
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ],
+                      SizedBox(height: gap),
+                      _ipTestRow(
+                        label: 'Yamaha Receiver IP address',
+                        hint: 'e.g. 192.168.2.2',
+                        controller: _yamahaIpController,
+                        findTooltip: 'Find receiver',
+                        onFind: _onFindYamaha,
+                        onTest: _onTestYamaha,
+                        result: _yamahaTestResult,
                       ),
                       SizedBox(height: gap),
                       const Text(
@@ -297,6 +400,63 @@ class _SettingsOverlayState extends State<SettingsOverlay> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _ipTestRow({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    required String findTooltip,
+    required VoidCallback onFind,
+    required VoidCallback onTest,
+    required String result,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                enabled: !_busy,
+                keyboardType: TextInputType.text,
+                autocorrect: false,
+                enableSuggestions: false,
+                style: const TextStyle(color: Colors.white),
+                decoration: _fieldDecoration(hint),
+              ),
+            ),
+            IconButton(
+              tooltip: findTooltip,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              padding: EdgeInsets.zero,
+              onPressed: _busy ? null : onFind,
+              icon: const Icon(Icons.wifi_find),
+              color: Colors.white70,
+            ),
+            FilledButton(
+              onPressed: _busy ? null : onTest,
+              style: _compactButton,
+              child: const Text('Test'),
+            ),
+          ],
+        ),
+        if (result.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            result,
+            style: TextStyle(color: _statusColor(result), fontSize: 16),
+          ),
+        ],
+      ],
     );
   }
 

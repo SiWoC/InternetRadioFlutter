@@ -6,6 +6,9 @@ import 'package:internetradio/models/app_settings.dart';
 import 'package:internetradio/models/radio_player_state.dart';
 import 'package:internetradio/models/radio_station.dart';
 import 'package:internetradio/models/remote_player_state.dart';
+import 'package:internetradio/models/yamaha_status.dart';
+import 'package:internetradio/services/lan_scan.dart';
+import 'package:internetradio/services/local_network_info.dart';
 import 'package:internetradio/services/network_protocol.dart';
 import 'package:internetradio/services/network_service.dart';
 import 'package:internetradio/services/radio_player_service.dart';
@@ -13,24 +16,29 @@ import 'package:internetradio/services/settings_repository.dart';
 import 'package:internetradio/services/station_repository.dart';
 import 'package:internetradio/controllers/screensaver_controller.dart';
 import 'package:internetradio/services/wakelock_service.dart';
+import 'package:internetradio/services/yamaha_protocol.dart';
+import 'package:internetradio/services/yamaha_service.dart';
 
-/// Orchestrates playback, station selection, settings, and Player/Remote mode.
+/// Orchestrates playback, station selection, settings, Yamaha, and Player/Remote mode.
 class RadioController extends ChangeNotifier {
   RadioController({
     required StationRepository stations,
     required SettingsRepository settings,
     RadioPlayer? player,
     NetworkService? network,
+    YamahaService? yamaha,
     ScreenWakelock? wakelock,
+    Future<String> Function()? localIpv4,
     Future<void> Function()? exitApp,
     Duration screensaverIdleTimeout = const Duration(seconds: 60),
-  })  : _stations = stations,
-        _settings = settings,
-        _player = player ?? RadioPlayerService(),
-        _network = network ?? NetworkService(),
-        _wakelock = wakelock ?? WakelockService(),
-        _exitApp = exitApp ?? _popApp
-  {
+  }) : _stations = stations,
+       _settings = settings,
+       _player = player ?? RadioPlayerService(),
+       _network = network ?? NetworkService(),
+       _yamaha = yamaha ?? YamahaService(),
+       _wakelock = wakelock ?? WakelockService(),
+       _localIpv4 = localIpv4 ?? LocalNetworkInfo.localIpv4,
+       _exitApp = exitApp ?? _popApp {
     _playerSubscription = _player.stateStream.listen((state) {
       _playerState = state;
       notifyListeners();
@@ -46,7 +54,9 @@ class RadioController extends ChangeNotifier {
   final SettingsRepository _settings;
   final RadioPlayer _player;
   final NetworkService _network;
+  final YamahaService _yamaha;
   final ScreenWakelock _wakelock;
+  final Future<String> Function() _localIpv4;
   final Future<void> Function() _exitApp;
 
   /// Idle timer / visibility for the bouncing-logo overlay (Player + keep on).
@@ -59,6 +69,12 @@ class RadioController extends ChangeNotifier {
   int? _selectedStationIndex;
   bool _settingsOpen = false;
   String? _settingsMessage;
+  bool _yamahaOpen = false;
+  YamahaStatus? _yamahaStatus;
+  List<YamahaInput> _yamahaInputs = const [];
+  bool _yamahaCommandInFlight = false;
+  int? _pendingVolumeTenthsDb;
+  bool _volumeFlushInFlight = false;
   bool _disposed = false;
   bool _remoteCommandInFlight = false;
   bool _modeSwitchInFlight = false;
@@ -77,6 +93,18 @@ class RadioController extends ChangeNotifier {
 
   /// True while [SettingsOverlay] is visible (screensaver must stay off).
   bool get isSettingsOpen => _settingsOpen;
+
+  /// True while the Yamaha overlay is visible (screensaver must stay off).
+  bool get isYamahaOpen => _yamahaOpen;
+
+  /// Last GET `Basic_Status` snapshot, if any.
+  YamahaStatus? get yamahaStatus => _yamahaStatus;
+
+  /// Last GET `Input_Sel_Item` list (writable inputs).
+  List<YamahaInput> get yamahaInputs => _yamahaInputs;
+
+  /// True while a Yamaha GET/PUT sequence is running.
+  bool get yamahaBusy => _yamahaCommandInFlight;
 
   /// Banner shown when Settings opens (e.g. invalid player IP).
   String? get settingsMessage => _settingsMessage;
@@ -109,13 +137,11 @@ class RadioController extends ChangeNotifier {
     );
   }
 
-  bool get isMuted => isRemoteMode
-      ? remotePlayerState.isMuted
-      : _playerState.isMuted;
+  bool get isMuted =>
+      isRemoteMode ? remotePlayerState.isMuted : _playerState.isMuted;
 
-  bool get isPlaying => isRemoteMode
-      ? remotePlayerState.isPlaying
-      : _playerState.isPlaying;
+  bool get isPlaying =>
+      isRemoteMode ? remotePlayerState.isPlaying : _playerState.isPlaying;
 
   /// Top-chrome line 1: stream station name when playing, else config name or status.
   String get chromeStationTitle {
@@ -254,8 +280,8 @@ class RadioController extends ChangeNotifier {
 
   /// Player + [DisplayPolicy.keepScreenOn] holds the screen; otherwise it may sleep.
   Future<void> _applyDisplayPolicy() async {
-    final keepOn = isPlayerMode &&
-        settings.displayPolicy == DisplayPolicy.keepScreenOn;
+    final keepOn =
+        isPlayerMode && settings.displayPolicy == DisplayPolicy.keepScreenOn;
     await _wakelock.setEnabled(keepOn);
   }
 
@@ -381,6 +407,7 @@ class RadioController extends ChangeNotifier {
 
   void openSettings({String? message}) {
     _assertNotDisposed();
+    _yamahaOpen = false;
     _settingsMessage = message;
     _settingsOpen = true;
     notifyListeners();
@@ -396,12 +423,75 @@ class RadioController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Opens the Yamaha overlay, or Settings when the receiver IP is empty.
+  void openYamaha() {
+    _assertNotDisposed();
+    if (settings.yamahaIp.trim().isEmpty) {
+      openSettings(message: 'Invalid Yamaha IP-address');
+      return;
+    }
+    _settingsOpen = false;
+    _settingsMessage = null;
+    _yamahaOpen = true;
+    unawaited(_loadYamaha());
+  }
+
+  void closeYamaha() {
+    _assertNotDisposed();
+    if (!_yamahaOpen) {
+      return;
+    }
+    _yamahaOpen = false;
+    notifyListeners();
+  }
+
+  /// GET status, then PUT the opposite power. Overlay stays as reported.
+  Future<void> toggleYamahaPower() {
+    return _runYamaha((ip) async {
+      final status = _yamahaStatus ?? await _yamaha.getBasicStatus(ip);
+      if (status == null) {
+        _yamahaStatus = null;
+        return;
+      }
+      final next = status.power == YamahaPower.on
+          ? YamahaPower.standby
+          : YamahaPower.on;
+      _yamahaStatus = status.copyWith(power: next);
+      notifyListeners();
+      await _yamaha.setPower(ip, next);
+    }, markBusy: false);
+  }
+
+  /// PUT input; wakes from Standby first and leaves the receiver On.
+  Future<void> selectYamahaInput(String inputSel) {
+    return _runYamaha((ip) async {
+      try {
+        if (await _wakeIfStandby(ip)) {
+          await _yamaha.selectInput(ip, inputSel);
+        }
+      } finally {
+        if (!_disposed) {
+          _yamahaStatus = await _yamaha.getBasicStatus(ip);
+          notifyListeners();
+        }
+      }
+    }, markBusy: false);
+  }
+
+  /// PUT volume +0.5 dB; wakes from Standby first and leaves the receiver On.
+  Future<void> yamahaVolumeUp() {
+    return _nudgeYamahaVolume(YamahaProtocol.volumeStepTenthsDb);
+  }
+
+  /// PUT volume −0.5 dB; wakes from Standby first and leaves the receiver On.
+  Future<void> yamahaVolumeDown() {
+    return _nudgeYamahaVolume(-YamahaProtocol.volumeStepTenthsDb);
+  }
+
   /// Persists [playerIp] (empty allowed). Does not close settings.
   Future<void> savePlayerIp(String playerIp) async {
     _assertNotDisposed();
-    await _settings.save(
-      _settings.settings.copyWith(playerIp: playerIp),
-    );
+    await _settings.save(_settings.settings.copyWith(playerIp: playerIp));
     notifyListeners();
   }
 
@@ -409,6 +499,7 @@ class RadioController extends ChangeNotifier {
   Future<void> saveSettings({
     required String playerIp,
     required String testUrl,
+    String? yamahaIp,
   }) async {
     _assertNotDisposed();
     testUrl = testUrl.trim();
@@ -420,25 +511,162 @@ class RadioController extends ChangeNotifier {
         lastStationName: current.lastStationName,
         testUrl: testUrl.isEmpty ? null : testUrl,
         displayPolicy: current.displayPolicy,
+        yamahaIp: (yamahaIp ?? current.yamahaIp).trim(),
       ),
     );
+    notifyListeners();
+  }
+
+  /// Persists [yamahaIp] (empty allowed). Does not close settings.
+  Future<void> saveYamahaIp(String yamahaIp) async {
+    _assertNotDisposed();
+    await _settings.save(_settings.settings.copyWith(yamahaIp: yamahaIp));
     notifyListeners();
   }
 
   /// Persists [policy] and applies wakelock for the current mode.
   Future<void> setDisplayPolicy(DisplayPolicy policy) async {
     _assertNotDisposed();
-    await _settings.save(
-      _settings.settings.copyWith(displayPolicy: policy),
-    );
+    await _settings.save(_settings.settings.copyWith(displayPolicy: policy));
     await _applyDisplayPolicy();
     notifyListeners();
   }
 
-  /// TCP `PING`/`PONG` probe used by Settings → Test Connection.
+  /// TCP `PING`/`PONG` probe for [ipAddress].
   Future<bool> testPlayerConnection(String ipAddress) async {
     _assertNotDisposed();
     return _network.ping(ipAddress);
+  }
+
+  /// GET `Basic_Status` probe used by Settings → Yamaha Test.
+  Future<bool> testYamahaConnection(String ipAddress) async {
+    _assertNotDisposed();
+    final status = await _yamaha.getBasicStatus(ipAddress);
+    return status != null;
+  }
+
+  /// /24 `PING` sweep: after [currentIp] on this LAN, else from `.1`.
+  Future<String?> findPlayerIp(String currentIp) async {
+    _assertNotDisposed();
+    final local = await _localIpv4();
+    if (!Ipv4Sweep.isIpv4(local)) {
+      return null;
+    }
+    return _network.findPlayer(localIpv4: local, afterIp: currentIp);
+  }
+
+  /// SSDP M-SEARCH for a Yamaha receiver, next after [currentIp].
+  Future<String?> findYamahaIp(String currentIp) async {
+    _assertNotDisposed();
+    return _yamaha.findReceiver(afterIp: currentIp);
+  }
+
+  Future<void> _loadYamaha() {
+    return _runYamaha((ip) async {
+      final statusFuture = _yamaha.getBasicStatus(ip);
+      final inputsFuture = _yamaha.getInputList(ip);
+      _yamahaStatus = await statusFuture;
+      final inputs = await inputsFuture;
+      if (inputs != null) {
+        _yamahaInputs = inputs;
+      }
+    });
+  }
+
+  Future<bool> _wakeIfStandby(String ip) async {
+    var status = _yamahaStatus;
+    if (status == null) {
+      status = await _yamaha.getBasicStatus(ip);
+      _yamahaStatus = status;
+      if (status == null) {
+        return false;
+      }
+    }
+    if (status.power == YamahaPower.on) {
+      return true;
+    }
+    final ok = await _yamaha.setPower(ip, YamahaPower.on);
+    if (!ok) {
+      return false;
+    }
+    _yamahaStatus = (_yamahaStatus ?? status).copyWith(power: YamahaPower.on);
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> _nudgeYamahaVolume(int deltaTenthsDb) async {
+    _assertNotDisposed();
+    final ip = settings.yamahaIp.trim();
+    if (ip.isEmpty) {
+      return;
+    }
+    if (_yamahaStatus == null) {
+      await _runYamaha((host) async {
+        _yamahaStatus = await _yamaha.getBasicStatus(host);
+      }, markBusy: false);
+      if (_yamahaStatus == null) {
+        return;
+      }
+    }
+
+    final current = _yamahaStatus!;
+    final next = YamahaProtocol.clampVolumeTenthsDb(
+      current.volumeTenthsDb + deltaTenthsDb,
+    );
+    _yamahaStatus = current.copyWith(volumeTenthsDb: next);
+    notifyListeners();
+    _pendingVolumeTenthsDb = next;
+    await _flushPendingVolume(ip);
+  }
+
+  Future<void> _flushPendingVolume(String ip) async {
+    if (_volumeFlushInFlight) {
+      return;
+    }
+    _volumeFlushInFlight = true;
+    try {
+      while (_pendingVolumeTenthsDb != null && !_disposed) {
+        final target = _pendingVolumeTenthsDb!;
+        _pendingVolumeTenthsDb = null;
+        if (!await _wakeIfStandby(ip)) {
+          return;
+        }
+        await _yamaha.setVolume(ip, target);
+      }
+    } finally {
+      _volumeFlushInFlight = false;
+      if (_pendingVolumeTenthsDb != null && !_disposed) {
+        await _flushPendingVolume(ip);
+      }
+    }
+  }
+
+  Future<void> _runYamaha(
+    Future<void> Function(String ip) action, {
+    bool markBusy = true,
+  }) async {
+    _assertNotDisposed();
+    final ip = settings.yamahaIp.trim();
+    if (ip.isEmpty) {
+      return;
+    }
+    if (markBusy) {
+      if (_yamahaCommandInFlight) {
+        return;
+      }
+      _yamahaCommandInFlight = true;
+      notifyListeners();
+    }
+    try {
+      await action(ip);
+    } finally {
+      if (markBusy) {
+        _yamahaCommandInFlight = false;
+        if (!_disposed) {
+          notifyListeners();
+        }
+      }
+    }
   }
 
   /// JSON stream URL, or [AppSettings.testUrl] when the URL-test slot has one stored.
@@ -516,7 +744,9 @@ class RadioController extends ChangeNotifier {
         return NetworkProtocol.ok;
       case ExitCommand():
         await stop(); // stop the player over method channel on the Kotlin side
-        unawaited(Future<void>.delayed(Duration.zero, _exitApp)); // exit the app, which will exit on all layers
+        unawaited(
+          Future<void>.delayed(Duration.zero, _exitApp),
+        ); // exit the app, which will exit on all layers
         return NetworkProtocol.ok;
       case TestUrlCommand(:final url):
         _onMutatingRemoteCommand();
